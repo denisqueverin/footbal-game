@@ -3,9 +3,11 @@ import { TOP_50_EURO_CLUBS } from './topClubs'
 import type { ColorSchemeId, GameMode, GameState, SlotPick, TeamCount, TeamId, TeamState } from './types'
 import { drawRandom } from './random'
 import { TOP_30_FOOTBALL_COUNTRIES_RU, pickRandomUnique } from './topCountries'
+import { roundTurnOrder } from './turnOrder'
 
 export type GameAction =
   | { type: 'setup/start' }
+  | { type: 'drawReveal/continue' }
   | { type: 'setup/setMode'; mode: GameMode }
   | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
@@ -96,6 +98,7 @@ export const initialGameState: GameState = {
   formationLocked: false,
   teamOrder: ['team1', 'team2'],
   mode: 'national',
+  draftTurnOrderBase: 0,
 
   countriesAll: [],
   countriesRemaining: [],
@@ -171,15 +174,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const order: TeamId[] =
         state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
 
+      const n = order.length
+      const draftTurnOrderBase = n > 0 ? Math.floor(Math.random() * n) : 0
+
       const nextTeams: GameState['teams'] = { ...state.teams }
       for (const teamId of order) {
         const prev = state.teams[teamId]
         nextTeams[teamId] = makeEmptyTeam(teamId, prev.formation, prev.name, prev.colorScheme)
       }
-      const base: GameState = {
+      return {
         ...state,
-        phase: 'drafting',
+        phase: 'drawReveal',
         formationLocked: true,
+        draftTurnOrderBase,
         countriesAll: items,
         countriesRemaining: items,
         currentCountry: null,
@@ -187,7 +194,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         turn: order[0] ?? 'team1',
         teams: nextTeams,
       }
-      return drawNextCountry(base)
+    }
+    case 'drawReveal/continue': {
+      if (state.phase !== 'drawReveal') return state
+      const base: GameState = { ...state, phase: 'drafting' }
+      const drawn = drawNextCountry(base)
+      if (!drawn.currentCountry) {
+        return { ...drawn, phase: 'finished' }
+      }
+      const first = roundTurnOrder(drawn.teamOrder, drawn.draftTurnOrderBase, drawn.roundIndex)[0]
+      return { ...drawn, turn: first ?? drawn.turn }
     }
     case 'draft/confirmPick': {
       if (state.phase !== 'drafting') return state
@@ -225,18 +241,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...nextState, phase: 'finished' }
       }
 
-      const nextTurn = nextTeamId(action.team, nextState.teamOrder)
-      const first = nextState.teamOrder[0] ?? nextTurn
+      const orderThisRound = roundTurnOrder(
+        nextState.teamOrder,
+        nextState.draftTurnOrderBase,
+        nextState.roundIndex,
+      )
+      const nextTurn = nextTeamId(action.team, orderThisRound)
+      const first = orderThisRound[0] ?? nextTurn
       if (nextTurn !== first) {
         return { ...nextState, turn: nextTurn }
       }
 
-      // last team confirmed: advance to next item and back to first team
+      // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
         return { ...advanced, phase: 'finished' }
       }
-      return advanced
+      const firstNextRound = roundTurnOrder(
+        advanced.teamOrder,
+        advanced.draftTurnOrderBase,
+        advanced.roundIndex,
+      )[0]
+      return { ...advanced, turn: firstNextRound ?? advanced.turn }
     }
     default:
       return state
