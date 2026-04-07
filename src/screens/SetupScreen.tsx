@@ -2,12 +2,25 @@ import type { FormationId } from '../game/formations'
 import { FORMATIONS } from '../game/formations'
 import { FormationPreview } from '../ui/FormationPreview'
 import type { TeamId } from '../game/types'
+import { TeamSetup } from './TeamSetup'
 
 type Props = {
   formationLocked: boolean
   team1Formation: FormationId
   team2Formation: FormationId
+  team3Formation: FormationId
+  team4Formation: FormationId
+  team1Name: string
+  team2Name: string
+  team3Name: string
+  team4Name: string
+  team1Color: string
+  team2Color: string
+  team3Color: string
+  team4Color: string
   onSetTeamFormation: (team: TeamId, formation: FormationId) => void
+  onSetTeamName: (team: TeamId, name: string) => void
+  onSetTeamColor: (team: TeamId, color: string) => void
   onStart: () => void
 }
 
@@ -46,6 +59,51 @@ export function SetupScreen(props: Props) {
             />
           </div>
         </div>
+
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Команды</div>
+            <button
+              type="button"
+              style={styles.addButton}
+              onClick={() => {}}
+            >
+              +
+            </button>
+            {false && <TeamSetup
+              teamId="Команда 3"
+              teamName={props.team3Name}
+              color={props.team3Color}
+              onNameChange={(value) => props.onSetTeamName('team3', value)}
+              onColorChange={(value) => props.onSetTeamColor('team3', value)}
+            />}
+            {false && <TeamSetup
+              teamId="Команда 4"
+              teamName={props.team4Name}
+              color={props.team4Color}
+              onNameChange={(value) => props.onSetTeamName('team4', value)}
+              onColorChange={(value) => props.onSetTeamColor('team4', value)}
+            />}
+          </div>
+          <div style={styles.teamSetupGrid}>
+            <TeamSetup
+              teamId="Команда 1"
+              teamName={props.team1Name}
+              color={props.team1Color}
+              onNameChange={(value) => props.onSetTeamName('team1', value)}
+              onColorChange={(value) => props.onSetTeamColor('team1', value)}
+            />
+            <TeamSetup
+              teamId="Команда 2"
+              teamName={props.team2Name}
+              color={props.team2Color}
+              onNameChange={(value) => props.onSetTeamName('team2', value)}
+              onColorChange={(value) => props.onSetTeamColor('team2', value)}
+            />
+          </div>
+        </div>
+
+
 
         <div style={styles.section}>
           <div style={styles.actions}>
@@ -120,11 +178,22 @@ const styles: Record<string, React.CSSProperties> = {
   label: { fontWeight: 650 },
   counter: { opacity: 0.85 },
   teamFormations: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 },
+  teamSetupGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 },
   teamBox: {
     borderRadius: 16,
     border: '1px solid rgba(255,255,255,0.12)',
     background: 'rgba(0,0,0,0.10)',
     padding: 12,
+  },
+  addButton: {
+    padding: '4px 8px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(0,0,0,0.22)',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontSize: 16,
+    fontWeight: 600,
   },
   teamTitle: { fontWeight: 750, marginBottom: 10 },
   formationGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 },

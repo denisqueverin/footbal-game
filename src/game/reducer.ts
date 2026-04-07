@@ -6,6 +6,8 @@ import { TOP_30_FOOTBALL_COUNTRIES_RU, pickRandomUnique } from './topCountries'
 export type GameAction =
   | { type: 'setup/start' }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
+  | { type: 'setup/setTeamName'; team: TeamId; name: string }
+  | { type: 'setup/setTeamColor'; team: TeamId; color: string }
   | { type: 'draft/confirmPick'; team: TeamId; slotId: string; playerName: string }
   | { type: 'game/reset' }
 
@@ -23,9 +25,10 @@ function makeEmptyTeam(team: TeamId, formation: FormationId): TeamState {
   }
   return {
     id: team,
-    name: team === 'team1' ? 'Команда 1' : 'Команда 2',
+    name: team === 'team1' ? 'Команда 1' : team === 'team2' ? 'Команда 2' : team === 'team3' ? 'Команда 3' : 'Команда 4',
     formation,
     picksBySlotId,
+    color: 'green',
   }
 }
 
@@ -33,8 +36,8 @@ function isTeamFull(team: TeamState): boolean {
   return Object.values(team.picksBySlotId).every((p) => Boolean(p.playerName))
 }
 
-function bothTeamsFull(state: GameState): boolean {
-  return isTeamFull(state.teams.team1) && isTeamFull(state.teams.team2)
+function isAllTeamsFull(state: GameState): boolean {
+  return isTeamFull(state.teams.team1) && isTeamFull(state.teams.team2) && isTeamFull(state.teams.team3) && isTeamFull(state.teams.team4)
 }
 
 function drawNextCountry(state: GameState): GameState {
@@ -67,6 +70,8 @@ export const initialGameState: GameState = {
   teams: {
     team1: makeEmptyTeam('team1', '1-4-3-3'),
     team2: makeEmptyTeam('team2', '1-4-3-3'),
+    team3: makeEmptyTeam('team3', '1-4-3-3'),
+    team4: makeEmptyTeam('team4', '1-4-3-3'),
   },
 }
 
@@ -82,7 +87,25 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const team = action.team
       return {
         ...state,
-        teams: { ...state.teams, [team]: makeEmptyTeam(team, formation) },
+        teams: { ...state.teams, [team]: { ...state.teams[team], formation } },
+      }
+    }
+    case 'setup/setTeamName': {
+      if (state.phase !== 'setup') return state
+      const name = action.name
+      const team = action.team
+      return {
+        ...state,
+        teams: { ...state.teams, [team]: { ...state.teams[team], name } },
+      }
+    }
+    case 'setup/setTeamColor': {
+      if (state.phase !== 'setup') return state
+      const color = action.color
+      const team = action.team
+      return {
+        ...state,
+        teams: { ...state.teams, [team]: { ...state.teams[team], color } },
       }
     }
     case 'setup/start': {
@@ -99,6 +122,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         teams: {
           team1: makeEmptyTeam('team1', state.teams.team1.formation),
           team2: makeEmptyTeam('team2', state.teams.team2.formation),
+          team3: makeEmptyTeam('team3', state.teams.team3.formation),
+          team4: makeEmptyTeam('team4', state.teams.team4.formation),
         },
       }
       return drawNextCountry(base)
@@ -134,15 +159,19 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         teams: { ...state.teams, [action.team]: nextTeam },
       }
 
-      if (bothTeamsFull(nextState)) {
+      if (isAllTeamsFull(nextState)) {
         return { ...nextState, phase: 'finished' }
       }
 
       if (action.team === 'team1') {
-        return { ...nextState, turn: 'team2' }
+        return { ...nextState, turn: 'team2' };
+      } else if (action.team === 'team2') {
+        return { ...nextState, turn: 'team3' };
+      } else if (action.team === 'team3') {
+        return { ...nextState, turn: 'team4' };
       }
 
-      // team2 confirmed: advance to next country and back to team1
+      // team4 confirmed: advance to next country and back to team1
       const advanced = drawNextCountry({ ...nextState, turn: 'team1' })
       if (!advanced.currentCountry) {
         return { ...advanced, phase: 'finished' }

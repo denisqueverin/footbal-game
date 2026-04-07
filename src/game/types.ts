@@ -1,6 +1,6 @@
 import type { FormationId } from './formations'
 
-export type TeamId = 'team1' | 'team2'
+export type TeamId = 'team1' | 'team2' | 'team3' | 'team4'
 
 export type GamePhase = 'setup' | 'drafting' | 'finished'
 
@@ -16,6 +16,7 @@ export type TeamState = {
   name: string
   formation: FormationId
   picksBySlotId: Record<string, SlotPick>
+  color: string
 }
 
 export type GameState = {
