@@ -1,26 +1,18 @@
 import type { FormationId } from '../game/formations'
 import { FORMATIONS } from '../game/formations'
 import { FormationPreview } from '../ui/FormationPreview'
-import type { TeamId } from '../game/types'
-import { TeamSetup } from './TeamSetup'
+import type { ColorSchemeId, GameMode, TeamCount, TeamId, TeamState } from '../game/types'
 
 type Props = {
   formationLocked: boolean
-  team1Formation: FormationId
-  team2Formation: FormationId
-  team3Formation: FormationId
-  team4Formation: FormationId
-  team1Name: string
-  team2Name: string
-  team3Name: string
-  team4Name: string
-  team1Color: string
-  team2Color: string
-  team3Color: string
-  team4Color: string
+  teamOrder: TeamId[]
+  teams: Record<TeamId, TeamState>
+  mode: GameMode
   onSetTeamFormation: (team: TeamId, formation: FormationId) => void
   onSetTeamName: (team: TeamId, name: string) => void
-  onSetTeamColor: (team: TeamId, color: string) => void
+  onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void
+  onSetTeamCount: (count: TeamCount) => void
+  onSetMode: (mode: GameMode) => void
   onStart: () => void
 }
 
@@ -32,8 +24,43 @@ export function SetupScreen(props: Props) {
           <div>
             <div style={styles.h1}>Футбольный драфт</div>
             <div style={styles.sub}>
-              Введите 20 стран (по одной в строке). Дальше они будут выпадать случайно без повторов.
+              Выберите режим и количество игроков, затем настройте команды и начните игру.
             </div>
+          </div>
+        </div>
+
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Режим</div>
+          </div>
+          <div style={styles.modeRow}>
+            <button
+              type="button"
+              onClick={() => props.onSetMode('national')}
+              style={{ ...styles.modeBtn, ...(props.mode === 'national' ? styles.modeBtnActive : null) }}
+              aria-pressed={props.mode === 'national'}
+            >
+              Сборные
+            </button>
+            <button
+              type="button"
+              onClick={() => props.onSetMode('clubs')}
+              style={{ ...styles.modeBtn, ...(props.mode === 'clubs' ? styles.modeBtnActive : null) }}
+              aria-pressed={props.mode === 'clubs'}
+            >
+              Клубы
+            </button>
+          </div>
+        </div>
+
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Игроков</div>
+          </div>
+          <div style={styles.teamCountRow}>
+            <CountButton count={2} active={props.teamOrder.length === 2} onPick={() => props.onSetTeamCount(2)} />
+            <CountButton count={3} active={props.teamOrder.length === 3} onPick={() => props.onSetTeamCount(3)} />
+            <CountButton count={4} active={props.teamOrder.length === 4} onPick={() => props.onSetTeamCount(4)} />
           </div>
         </div>
 
@@ -45,65 +72,23 @@ export function SetupScreen(props: Props) {
             ) : null}
           </div>
           <div style={styles.teamFormations}>
-            <TeamFormationPicker
-              title="Команда 1"
-              activeFormation={props.team1Formation}
-              disabled={props.formationLocked}
-              onPick={(formation) => props.onSetTeamFormation('team1', formation)}
-            />
-            <TeamFormationPicker
-              title="Команда 2"
-              activeFormation={props.team2Formation}
-              disabled={props.formationLocked}
-              onPick={(formation) => props.onSetTeamFormation('team2', formation)}
-            />
+            {props.teamOrder.map((teamId) => {
+              const t = props.teams[teamId]
+              return (
+                <TeamBox
+                  key={teamId}
+                  teamName={t.name}
+                  activeFormation={t.formation}
+                  colorScheme={t.colorScheme}
+                  disabled={props.formationLocked}
+                  onNameChange={(name) => props.onSetTeamName(teamId, name)}
+                  onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
+                  onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
+                />
+              )
+            })}
           </div>
         </div>
-
-        <div style={styles.section}>
-          <div style={styles.labelRow}>
-            <div style={styles.label}>Команды</div>
-            <button
-              type="button"
-              style={styles.addButton}
-              onClick={() => {}}
-            >
-              +
-            </button>
-            {false && <TeamSetup
-              teamId="Команда 3"
-              teamName={props.team3Name}
-              color={props.team3Color}
-              onNameChange={(value) => props.onSetTeamName('team3', value)}
-              onColorChange={(value) => props.onSetTeamColor('team3', value)}
-            />}
-            {false && <TeamSetup
-              teamId="Команда 4"
-              teamName={props.team4Name}
-              color={props.team4Color}
-              onNameChange={(value) => props.onSetTeamName('team4', value)}
-              onColorChange={(value) => props.onSetTeamColor('team4', value)}
-            />}
-          </div>
-          <div style={styles.teamSetupGrid}>
-            <TeamSetup
-              teamId="Команда 1"
-              teamName={props.team1Name}
-              color={props.team1Color}
-              onNameChange={(value) => props.onSetTeamName('team1', value)}
-              onColorChange={(value) => props.onSetTeamColor('team1', value)}
-            />
-            <TeamSetup
-              teamId="Команда 2"
-              teamName={props.team2Name}
-              color={props.team2Color}
-              onNameChange={(value) => props.onSetTeamName('team2', value)}
-              onColorChange={(value) => props.onSetTeamColor('team2', value)}
-            />
-          </div>
-        </div>
-
-
 
         <div style={styles.section}>
           <div style={styles.actions}>
@@ -121,31 +106,91 @@ export function SetupScreen(props: Props) {
   )
 }
 
-function TeamFormationPicker(props: {
-  title: string
+function CountButton(props: { count: TeamCount; active: boolean; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={props.onPick}
+      style={{ ...styles.countBtn, ...(props.active ? styles.countBtnActive : null) }}
+      aria-pressed={props.active}
+    >
+      {props.count}
+    </button>
+  )
+}
+
+function SchemeButton(props: { id: ColorSchemeId; active: boolean; label: string; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={props.onPick}
+      style={{ ...styles.schemeBtn, ...(props.active ? styles.schemeBtnActive : null) }}
+      aria-pressed={props.active}
+    >
+      <span style={{ ...styles.schemeDot, background: schemeDotColor(props.id) }} aria-hidden="true" />
+      {props.label}
+    </button>
+  )
+}
+
+function schemeDotColor(id: ColorSchemeId): string {
+  switch (id) {
+    case 'green':
+      return 'rgba(38,145,80,0.95)'
+    case 'red':
+      return 'rgba(190,48,58,0.95)'
+    case 'blue':
+      return 'rgba(45,92,200,0.95)'
+    case 'white':
+      return 'rgba(240,240,245,0.95)'
+    default:
+      return 'rgba(255,255,255,0.9)'
+  }
+}
+
+function formationLabel(id: FormationId): string {
+  return id.replace(/^1-/, '')
+}
+
+function TeamBox(props: {
+  teamName: string
   activeFormation: FormationId
+  colorScheme: ColorSchemeId
   disabled: boolean
-  onPick: (formation: FormationId) => void
+  onNameChange: (name: string) => void
+  onPickScheme: (scheme: ColorSchemeId) => void
+  onPickFormation: (formation: FormationId) => void
 }) {
   return (
     <div style={styles.teamBox}>
-      <div style={styles.teamTitle}>{props.title}</div>
+      <input
+        value={props.teamName}
+        onChange={(e) => props.onNameChange(e.target.value)}
+        placeholder="Название команды"
+        style={styles.teamNameInput}
+      />
+      <div style={styles.schemeRowWithGap}>
+        <SchemeButton id="green" active={props.colorScheme === 'green'} label="Зелёная" onPick={() => props.onPickScheme('green')} />
+        <SchemeButton id="red" active={props.colorScheme === 'red'} label="Красная" onPick={() => props.onPickScheme('red')} />
+        <SchemeButton id="blue" active={props.colorScheme === 'blue'} label="Синяя" onPick={() => props.onPickScheme('blue')} />
+        <SchemeButton id="white" active={props.colorScheme === 'white'} label="Белая" onPick={() => props.onPickScheme('white')} />
+      </div>
       <div style={styles.formationGrid}>
         {(Object.keys(FORMATIONS) as FormationId[]).map((id) => (
           <button
             key={id}
             type="button"
-            onClick={() => props.onPick(id)}
+            onClick={() => props.onPickFormation(id)}
             disabled={props.disabled}
             style={{
               ...styles.formationCard,
               ...(props.activeFormation === id ? styles.formationCardActive : null),
               ...(props.disabled ? styles.formationCardDisabled : null),
             }}
-            title={id}
+            title={formationLabel(id)}
           >
             <div style={styles.formationCardTop}>
-              <div style={styles.formationName}>{id}</div>
+              <div style={styles.formationName}>{formationLabel(id)}</div>
             </div>
             <FormationPreview formation={id} />
           </button>
@@ -177,25 +222,68 @@ const styles: Record<string, React.CSSProperties> = {
   labelRow: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' },
   label: { fontWeight: 650 },
   counter: { opacity: 0.85 },
+  modeRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
+  modeBtn: {
+    padding: '9px 12px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    opacity: 0.92,
+    fontWeight: 650,
+  },
+  modeBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  teamCountRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
+  countBtn: {
+    padding: '8px 12px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    minWidth: 44,
+    opacity: 0.92,
+    fontWeight: 700,
+  },
+  countBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
   teamFormations: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 },
-  teamSetupGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 },
   teamBox: {
     borderRadius: 16,
     border: '1px solid rgba(255,255,255,0.12)',
     background: 'rgba(0,0,0,0.10)',
     padding: 12,
   },
-  addButton: {
-    padding: '4px 8px',
+  teamNameInput: {
+    width: '100%',
+    padding: '10px 12px',
     borderRadius: 12,
     border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.22)',
+    background: 'rgba(0,0,0,0.24)',
+    color: 'inherit',
+    outline: 'none',
+  },
+  schemeRowWithGap: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 12 },
+  schemeBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 10px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
     color: 'inherit',
     cursor: 'pointer',
-    fontSize: 16,
-    fontWeight: 600,
+    opacity: 0.92,
   },
-  teamTitle: { fontWeight: 750, marginBottom: 10 },
+  schemeBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  schemeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    border: '1px solid rgba(0,0,0,0.35)',
+    boxShadow: '0 0 0 2px rgba(255,255,255,0.08) inset',
+  },
   formationGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 },
   formationCard: {
     textAlign: 'left',
