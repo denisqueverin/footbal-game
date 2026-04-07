@@ -199,16 +199,21 @@ h3,
 
 .confirm-new-game-panel {
   width: min(460px, 100%);
-  padding: 28px 40px 24px;
+  /* Запас под абсолютный крестик (top + высота кнопки), чтобы текст не заезжал на него */
+  padding: 52px 48px 28px;
 }
 
 .confirm-new-game-text {
   margin: 0 0 22px;
+  padding: 0 4px;
   font-size: 16px;
   line-height: 1.5;
   font-weight: 600;
   text-align: center;
   opacity: 0.95;
+  max-width: 36em;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .confirm-new-game-actions {
@@ -769,7 +774,7 @@ h3,
 }
 
 .draw-reveal-title {
-  margin: 0 0 10px;
+  margin: 0 0 22px;
   font-family: var(--fc-font-display);
   font-size: clamp(22px, 4vw, 30px);
   font-weight: 800;
@@ -777,16 +782,6 @@ h3,
   line-height: 1.2;
   color: var(--fc-text);
   text-shadow: 0 2px 28px rgba(30, 107, 66, 0.55);
-}
-
-.draw-reveal-lead {
-  margin: 0 0 22px;
-  font-size: 14px;
-  line-height: 1.5;
-  opacity: 0.78;
-  max-width: 44em;
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .draw-reveal-stage {
@@ -1263,6 +1258,7 @@ h3,
 .setup-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   margin-top: 8px;
   flex-wrap: wrap;
