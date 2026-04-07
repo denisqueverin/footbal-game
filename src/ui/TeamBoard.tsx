@@ -16,7 +16,7 @@ export function TeamBoard(props: Props) {
   return (
     <div
       style={{
-        ...styles.card,
+        ...cardStyle(props.team.color),
         ...(props.disabled ? styles.cardDisabled : null),
       }}
       aria-disabled={props.disabled}
@@ -77,16 +77,19 @@ export function TeamBoard(props: Props) {
   )
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  card: {
+function cardStyle(color: string): React.CSSProperties {
+  return {
     height: '100%',
     borderRadius: 16,
     border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.06)',
+    background: color || 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-  },
+  }
+}
+
+const styles: Record<string, React.CSSProperties> = {
   cardDisabled: { opacity: 0.92 },
   header: {
     display: 'flex',
