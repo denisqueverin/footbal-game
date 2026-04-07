@@ -1,17 +1,19 @@
-import type { FormationId } from '../game/formations'
-import { formationRowsForDisplay } from '../game/formations'
+import type { CSSProperties } from 'react';
 
-type Props = {
-  formation: FormationId
+import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
+
+export interface FormationPreviewProps {
+  formation: FormationId;
 }
 
-export function FormationPreview(props: Props) {
-  const rows = formationRowsForDisplay(props.formation)
+export function FormationPreview(props: FormationPreviewProps) {
+  const rows = formationRowsForDisplay(props.formation);
+
   return (
     <div style={styles.pitch} aria-hidden="true">
-      {rows.map((row, idx) => (
+      {rows.map((row, rowIndex) => (
         <div
-          key={idx}
+          key={rowIndex}
           style={{
             ...styles.row,
             gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
@@ -23,10 +25,10 @@ export function FormationPreview(props: Props) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   pitch: {
     borderRadius: 12,
     border: '1px solid rgba(255,255,255,0.12)',
@@ -45,5 +47,4 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(0,0,0,0.18)',
     justifySelf: 'center',
   },
-}
-
+};

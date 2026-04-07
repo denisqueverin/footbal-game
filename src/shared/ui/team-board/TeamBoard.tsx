@@ -1,18 +1,20 @@
-import { formationRowsForDisplay, type FormationId } from '../game/formations'
-import type { ColorSchemeId, GameMode, TeamState } from '../game/types'
-import { getCountryFlagUrlRu } from '../game/topCountries'
+import type { CSSProperties } from 'react';
 
-type Props = {
-  team: TeamState
-  formation: FormationId
-  mode: GameMode
-  disabled: boolean
-  selectedSlotId: string | null
-  onSelectSlot?: (slotId: string) => void
+import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
+import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
+import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/types';
+
+export interface TeamBoardProps {
+  team: TeamState;
+  formation: FormationId;
+  mode: GameMode;
+  disabled: boolean;
+  selectedSlotId: string | null;
+  onSelectSlot?: (slotId: string) => void;
 }
 
-export function TeamBoard(props: Props) {
-  const rows = formationRowsForDisplay(props.formation)
+export function TeamBoard(props: TeamBoardProps) {
+  const rows = formationRowsForDisplay(props.formation);
 
   return (
     <div
@@ -37,10 +39,11 @@ export function TeamBoard(props: Props) {
             }}
           >
             {row.map((cell) => {
-              const pick = props.team.picksBySlotId[cell.slotId]
-              const isSelected = props.selectedSlotId === cell.slotId
-              const isTaken = Boolean(pick?.playerName)
-              const flagUrl = props.mode === 'national' ? getCountryFlagUrlRu(pick?.country) : null
+              const pick = props.team.picksBySlotId[cell.slotId];
+              const isSelected = props.selectedSlotId === cell.slotId;
+              const isTaken = Boolean(pick?.playerName);
+              const flagUrl = props.mode === 'national' ? getCountryFlagUrlRu(pick?.country) : null;
+
               return (
                 <button
                   key={cell.slotId}
@@ -53,7 +56,7 @@ export function TeamBoard(props: Props) {
                     ...(isSelected ? styles.slotSelected : null),
                     ...(props.disabled ? styles.slotDisabled : null),
                   }}
-                  title={isTaken ? `${pick.playerName} (${pick.country ?? '—'})` : 'Выбрать слот'}
+                  title={isTaken ? `${pick?.playerName ?? '—'} (${pick?.country ?? '—'})` : 'Выбрать слот'}
                 >
                   <div style={styles.slotLabel}>
                     {cell.label}
@@ -69,35 +72,35 @@ export function TeamBoard(props: Props) {
                   <div style={styles.slotName}>{pick?.playerName ?? '—'}</div>
                   <div style={styles.slotCountry}>{pick?.country ?? ''}</div>
                 </button>
-              )
+              );
             })}
           </div>
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 function formationLabel(id: FormationId): string {
-  return id.replace(/^1-/, '')
+  return id.replace(/^1-/, '');
 }
 
 function pitchBackground(scheme: ColorSchemeId): string {
   switch (scheme) {
     case 'green':
-      return 'linear-gradient(180deg, rgba(38,145,80,0.25), rgba(38,145,80,0.10)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)'
+      return 'linear-gradient(180deg, rgba(38,145,80,0.25), rgba(38,145,80,0.10)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
     case 'red':
-      return 'linear-gradient(180deg, rgba(190,48,58,0.22), rgba(190,48,58,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)'
+      return 'linear-gradient(180deg, rgba(190,48,58,0.22), rgba(190,48,58,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
     case 'blue':
-      return 'linear-gradient(180deg, rgba(45,92,200,0.22), rgba(45,92,200,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)'
+      return 'linear-gradient(180deg, rgba(45,92,200,0.22), rgba(45,92,200,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
     case 'white':
-      return 'linear-gradient(180deg, rgba(245,245,248,0.18), rgba(245,245,248,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.08), transparent 60%)'
+      return 'linear-gradient(180deg, rgba(245,245,248,0.18), rgba(245,245,248,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.08), transparent 60%)';
     default:
-      return 'linear-gradient(180deg, rgba(38,145,80,0.25), rgba(38,145,80,0.10)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)'
+      return 'linear-gradient(180deg, rgba(38,145,80,0.25), rgba(38,145,80,0.10)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
   }
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   card: {
     height: '100%',
     borderRadius: 16,
@@ -152,5 +155,4 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(0,0,0,0.4)',
     backgroundColor: '#000',
   },
-}
-
+};
