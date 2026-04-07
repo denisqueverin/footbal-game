@@ -129,3 +129,8 @@ export function allSlotIds(formation: FormationId): string[] {
   return rows.flatMap((r) => r.map((c) => c.slotId))
 }
 
+/** Ряды для отрисовки поля: нападающие сверху, вратарь снизу. */
+export function formationRowsForDisplay(formation: FormationId): FormationRow[] {
+  return [...FORMATIONS[formation].rows].reverse()
+}
+

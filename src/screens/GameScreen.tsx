@@ -1,6 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GameState, TeamId } from '../game/types'
+import { RoundIntroModal } from '../ui/RoundIntroModal'
 import { TeamBoard } from '../ui/TeamBoard'
+
+const ROUND_MODAL_MS = 7000
+const ROUND_MODAL_EXIT_MS = 380
 
 type Props = {
   state: GameState
@@ -14,6 +18,26 @@ export function GameScreen(props: Props) {
 
   const [playerName, setPlayerName] = useState('')
   const [slotId, setSlotId] = useState<string | null>(null)
+  const [roundModalOpen, setRoundModalOpen] = useState(false)
+  const [roundModalExiting, setRoundModalExiting] = useState(false)
+  const roundModalTimersRef = useRef<{ exit?: number; hide?: number }>({})
+
+  const clearRoundModalTimers = useCallback(() => {
+    const t = roundModalTimersRef.current
+    if (t.exit !== undefined) window.clearTimeout(t.exit)
+    if (t.hide !== undefined) window.clearTimeout(t.hide)
+    roundModalTimersRef.current = {}
+  }, [])
+
+  const closeRoundModal = useCallback(() => {
+    clearRoundModalTimers()
+    setRoundModalExiting(true)
+    roundModalTimersRef.current.hide = window.setTimeout(() => {
+      setRoundModalOpen(false)
+      setRoundModalExiting(false)
+      roundModalTimersRef.current = {}
+    }, ROUND_MODAL_EXIT_MS)
+  }, [clearRoundModalTimers])
 
   const activeTeamState = state.teams[activeTeam]
   const activeSlotTaken = slotId ? Boolean(activeTeamState.picksBySlotId[slotId]?.playerName) : false
@@ -26,6 +50,33 @@ export function GameScreen(props: Props) {
     setSlotId(null)
   }, [activeTeam])
 
+  useEffect(() => {
+    if (state.phase !== 'drafting' || !state.currentCountry) {
+      clearRoundModalTimers()
+      setRoundModalOpen(false)
+      setRoundModalExiting(false)
+      return
+    }
+
+    clearRoundModalTimers()
+    setRoundModalOpen(true)
+    setRoundModalExiting(false)
+
+    roundModalTimersRef.current.exit = window.setTimeout(() => {
+      setRoundModalExiting(true)
+    }, ROUND_MODAL_MS)
+
+    roundModalTimersRef.current.hide = window.setTimeout(() => {
+      setRoundModalOpen(false)
+      setRoundModalExiting(false)
+      roundModalTimersRef.current = {}
+    }, ROUND_MODAL_MS + ROUND_MODAL_EXIT_MS)
+
+    return () => {
+      clearRoundModalTimers()
+    }
+  }, [state.roundIndex, state.currentCountry, state.phase, clearRoundModalTimers])
+
   function confirm() {
     if (!slotId) return
     props.onConfirmPick(activeTeam, slotId, playerName)
@@ -35,6 +86,14 @@ export function GameScreen(props: Props) {
 
   return (
     <div style={styles.page}>
+      <RoundIntroModal
+        open={roundModalOpen}
+        exiting={roundModalExiting}
+        round={state.roundIndex}
+        sourceLabel={state.currentCountry ?? ''}
+        mode={state.mode}
+        onClose={closeRoundModal}
+      />
       <div style={styles.topbar}>
         <div>
           <div style={styles.title}>{state.mode === 'clubs' ? 'Текущий клуб' : 'Текущая страна'}</div>

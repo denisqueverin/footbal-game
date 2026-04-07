@@ -1,4 +1,4 @@
-import { FORMATIONS, type FormationId } from '../game/formations'
+import { formationRowsForDisplay, type FormationId } from '../game/formations'
 import type { ColorSchemeId, GameMode, TeamState } from '../game/types'
 import { getCountryFlagUrlRu } from '../game/topCountries'
 
@@ -12,7 +12,7 @@ type Props = {
 }
 
 export function TeamBoard(props: Props) {
-  const rows = FORMATIONS[props.formation].rows
+  const rows = formationRowsForDisplay(props.formation)
 
   return (
     <div

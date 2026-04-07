@@ -1,12 +1,12 @@
 import type { FormationId } from '../game/formations'
-import { FORMATIONS } from '../game/formations'
+import { formationRowsForDisplay } from '../game/formations'
 
 type Props = {
   formation: FormationId
 }
 
 export function FormationPreview(props: Props) {
-  const rows = FORMATIONS[props.formation].rows
+  const rows = formationRowsForDisplay(props.formation)
   return (
     <div style={styles.pitch} aria-hidden="true">
       {rows.map((row, idx) => (
