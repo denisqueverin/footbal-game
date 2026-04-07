@@ -1,4 +1,5 @@
-export const TOP_30_FOOTBALL_COUNTRIES_RU = [
+/** ТОП-15: порядок как в подборе режима. */
+export const TOP_15_FOOTBALL_COUNTRIES_RU = [
   'Аргентина',
   'Бразилия',
   'Франция',
@@ -13,6 +14,12 @@ export const TOP_30_FOOTBALL_COUNTRIES_RU = [
   'Уругвай',
   'Колумбия',
   'Мексика',
+  'Россия',
+] as const
+
+/** ТОП-15 + ещё 16 стран (в интерфейсе — «ТОП-30»). Всего 31 национальная сборная. */
+export const TOP_30_FOOTBALL_COUNTRIES_RU = [
+  ...TOP_15_FOOTBALL_COUNTRIES_RU,
   'США',
   'Швейцария',
   'Дания',
@@ -46,6 +53,7 @@ const ISO2_BY_COUNTRY_RU: Record<string, string> = {
   Уругвай: 'uy',
   Колумбия: 'co',
   Мексика: 'mx',
+  Россия: 'ru',
   США: 'us',
   Швейцария: 'ch',
   Дания: 'dk',
@@ -62,7 +70,6 @@ const ISO2_BY_COUNTRY_RU: Record<string, string> = {
   Эквадор: 'ec',
   Сербия: 'rs',
   Турция: 'tr',
-  Россия: 'ru',
 }
 
 // Флаги берём из локальной папки public/flags, чтобы не зависеть от внешних CDN
@@ -86,4 +93,3 @@ export function pickRandomUnique<T>(items: readonly T[], count: number): T[] {
   }
   return out
 }
-

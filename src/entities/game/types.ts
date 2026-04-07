@@ -3,9 +3,12 @@ import type { FormationId } from './formations'
 export type TeamId = 'team1' | 'team2' | 'team3' | 'team4'
 export type TeamCount = 2 | 3 | 4
 
+/** Сколько подсказок «Лучший состав» у каждой команды за всю игру (выбор в меню). */
+export type HintsBudget = 1 | 2 | 3
+
 export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
 
-export type GameMode = 'national' | 'clubs'
+export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs'
 
 export type ColorSchemeId = 'green' | 'red' | 'blue' | 'white'
 
@@ -29,6 +32,16 @@ export type GameState = {
   formationLocked: boolean
   teamOrder: TeamId[]
   mode: GameMode
+
+  /** Показывать в подсказке «Лучший состав» скамейку запасных или только стартовых 11. */
+  bestLineupIncludeBench: boolean
+
+  /** Лимит подсказок «Лучший состав» на команду за игру (1–3). */
+  hintsBudgetPerPlayer: HintsBudget
+  /** Сколько подсказок осталось у каждой команды. */
+  hintsRemaining: Record<TeamId, number>
+  /** Уже использовали подсказку в текущем раунде (сбрасывается при новом раунде). */
+  hintUsedThisRound: Record<TeamId, boolean>
 
   /** Случайное смещение стартового хода в раунде 1 (0 .. teamOrder.length-1). */
   draftTurnOrderBase: number

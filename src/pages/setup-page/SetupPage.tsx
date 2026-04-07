@@ -1,13 +1,21 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
+
+import { RulesModal } from '@/shared/ui/rules-modal';
 
 import { FORMATIONS, type FormationId } from '@/entities/game/formations';
-import type { ColorSchemeId, GameMode, TeamCount, TeamId, TeamState } from '@/entities/game/types';
+import type { ColorSchemeId, GameMode, HintsBudget, TeamCount, TeamId, TeamState } from '@/entities/game/types';
 
 import { FormationPreview } from '@/shared/ui/formation-preview';
 
 import { APP_VERSION } from '@/shared/config/version';
 
-import { SETUP_MODE_OPTIONS, SETUP_SCHEME_OPTIONS, SETUP_TEAM_COUNTS } from './setup-page.constants';
+import {
+  SETUP_BEST_LINEUP_BENCH_OPTIONS,
+  SETUP_HINT_BUDGETS,
+  SETUP_MODE_OPTIONS,
+  SETUP_SCHEME_OPTIONS,
+  SETUP_TEAM_COUNTS,
+} from './setup-page.constants';
 import { formationLabelShort } from './setup-page.utils';
 
 export interface SetupPageProps {
@@ -19,6 +27,10 @@ export interface SetupPageProps {
   onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void;
   onSetTeamCount: (count: TeamCount) => void;
   onSetMode: (mode: GameMode) => void;
+  hintsBudget: HintsBudget;
+  onSetHintsBudget: (budget: HintsBudget) => void;
+  bestLineupIncludeBench: boolean;
+  onSetBestLineupIncludeBench: (includeBench: boolean) => void;
   onStart: () => void;
 }
 
@@ -26,6 +38,25 @@ interface CountButtonProps {
   count: TeamCount;
   isActive: boolean;
   onPick: () => void;
+}
+
+interface HintBudgetButtonProps {
+  budget: HintsBudget;
+  isActive: boolean;
+  onPick: () => void;
+}
+
+function HintBudgetButton(props: HintBudgetButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={props.onPick}
+      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
+      aria-pressed={props.isActive}
+    >
+      {props.budget}
+    </button>
+  );
 }
 
 function CountButton(props: CountButtonProps) {
@@ -127,9 +158,12 @@ function TeamBox(props: TeamBoxProps) {
 }
 
 export function SetupPage(props: SetupPageProps) {
+  const [rulesOpen, setRulesOpen] = useState(false);
+
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
+    <>
+      <div style={styles.page}>
+        <div style={styles.card}>
         <div style={styles.headerRow}>
           <div>
             <div style={styles.h1}>Футбольный драфт</div>
@@ -137,6 +171,9 @@ export function SetupPage(props: SetupPageProps) {
               Выберите режим и количество игроков, затем настройте команды и начните игру.
             </div>
           </div>
+          <button type="button" onClick={() => setRulesOpen(true)} style={styles.rulesBtn}>
+            Правила
+          </button>
         </div>
 
         <div style={styles.section}>
@@ -178,6 +215,47 @@ export function SetupPage(props: SetupPageProps) {
         </div>
 
         <div style={styles.section}>
+          <div style={styles.hintsFormatRow}>
+            <div style={styles.hintsFormatCol}>
+              <div style={styles.labelRow}>
+                <div style={styles.label}>Подсказки «Лучший состав» на команду за игру</div>
+              </div>
+              <div style={styles.teamCountRow}>
+                {SETUP_HINT_BUDGETS.map((budget) => (
+                  <HintBudgetButton
+                    key={budget}
+                    budget={budget}
+                    isActive={props.hintsBudget === budget}
+                    onPick={() => props.onSetHintsBudget(budget)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div style={styles.hintsFormatCol}>
+              <div style={styles.labelRow}>
+                <div style={styles.label}>Формат «Лучший состав» в подсказке</div>
+              </div>
+              <div style={styles.modeRow}>
+                {SETUP_BEST_LINEUP_BENCH_OPTIONS.map((option) => (
+                  <button
+                    key={String(option.includeBench)}
+                    type="button"
+                    onClick={() => props.onSetBestLineupIncludeBench(option.includeBench)}
+                    style={{
+                      ...styles.modeBtn,
+                      ...(props.bestLineupIncludeBench === option.includeBench ? styles.modeBtnActive : null),
+                    }}
+                    aria-pressed={props.bestLineupIncludeBench === option.includeBench}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.section}>
           <div style={styles.labelRow}>
             <div style={styles.label}>Схема (каждая команда выбирает свою)</div>
             {props.formationLocked ? <div style={styles.muted}>Смена схемы заблокирована после первого выбора</div> : null}
@@ -212,6 +290,8 @@ export function SetupPage(props: SetupPageProps) {
         <div style={styles.versionFoot}>Версия {APP_VERSION}</div>
       </div>
     </div>
+      <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
+    </>
   );
 }
 
@@ -230,10 +310,37 @@ const styles: Record<string, CSSProperties> = {
     padding: 20,
     backdropFilter: 'blur(10px)',
   },
-  headerRow: { display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'start' },
+  headerRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 16,
+    alignItems: 'start',
+    flexWrap: 'wrap',
+  },
+  rulesBtn: {
+    padding: '9px 14px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontWeight: 650,
+    fontSize: 14,
+    flexShrink: 0,
+  },
   h1: { fontSize: 28, fontWeight: 700, letterSpacing: -0.2 },
   sub: { opacity: 0.85, marginTop: 6 },
   section: { marginTop: 18 },
+  hintsFormatRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 20,
+    alignItems: 'flex-start',
+  },
+  hintsFormatCol: {
+    flex: '1 1 240px',
+    minWidth: 0,
+  },
   labelRow: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' },
   label: { fontWeight: 650 },
   modeRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },

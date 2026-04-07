@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { formationRowsForDisplay } from '@/entities/game/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
+import { isClubsMode, isNationalMode } from '@/entities/game/gameMode';
 import type { GameState, TeamId } from '@/entities/game/types';
 
 export interface LineupEditorProps {
@@ -30,8 +31,8 @@ export function LineupEditor(props: LineupEditorProps) {
                     const pick = team.picksBySlotId[cell.slotId];
                     const value = pick?.playerName ?? '';
                     const sourceLabel = pick?.country;
-                    const clubFlagUrl = state.mode === 'clubs' ? getClubFlagUrl(sourceLabel) : null;
-                    const natFlagUrl = state.mode === 'national' ? getCountryFlagUrlRu(sourceLabel) : null;
+                    const clubFlagUrl = isClubsMode(state.mode) ? getClubFlagUrl(sourceLabel) : null;
+                    const natFlagUrl = isNationalMode(state.mode) ? getCountryFlagUrlRu(sourceLabel) : null;
                     /** Только слоты, где уже был ход драфта (есть клуб/страна); пустые клетки не трогаем. */
                     const hasDraftPick = Boolean(pick?.country);
                     const inputDisabled = !hasDraftPick;
@@ -60,7 +61,7 @@ export function LineupEditor(props: LineupEditorProps) {
                           />
                           {sourceLabel ? (
                             <span style={styles.sourceHint}>
-                              {state.mode === 'clubs' ? (
+                              {isClubsMode(state.mode) ? (
                                 <>
                                   <span>Клуб: {sourceLabel}</span>
                                   {clubFlagUrl ? <img src={clubFlagUrl} alt="" style={styles.hintFlag} /> : null}

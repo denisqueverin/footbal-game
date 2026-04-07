@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 import type { FormationId } from '@/entities/game/formations';
 import { createInitialGameState, gameReducer } from '@/entities/game/reducer';
-import type { ColorSchemeId, GameMode, TeamCount, TeamId } from '@/entities/game/types';
+import type { ColorSchemeId, GameMode, HintsBudget, TeamCount, TeamId } from '@/entities/game/types';
 
 import { DrawRevealPage } from '@/pages/draw-reveal-page';
 import { GamePage } from '@/pages/game-page';
@@ -43,6 +43,14 @@ export function App() {
     dispatch({ type: 'setup/setTeamColorScheme', team, scheme });
   }, []);
 
+  const handleSetupSetHintsBudget = useCallback((budget: HintsBudget) => {
+    dispatch({ type: 'setup/setHintsBudget', budget });
+  }, []);
+
+  const handleSetupSetBestLineupIncludeBench = useCallback((includeBench: boolean) => {
+    dispatch({ type: 'setup/setBestLineupIncludeBench', includeBench });
+  }, []);
+
   const handleSetupStart = useCallback(() => {
     dispatch({ type: 'setup/start' });
   }, []);
@@ -73,6 +81,10 @@ export function App() {
     dispatch({ type: 'draft/setPickPlayerName', team, slotId, playerName });
   }, []);
 
+  const handleUseBestLineupHint = useCallback((team: TeamId) => {
+    dispatch({ type: 'draft/useBestLineupHint', team });
+  }, []);
+
   if (state.phase === 'setup') {
     return (
       <SetupPage
@@ -84,6 +96,10 @@ export function App() {
         onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
         onSetMode={handleSetupSetMode}
+        hintsBudget={state.hintsBudgetPerPlayer}
+        onSetHintsBudget={handleSetupSetHintsBudget}
+        bestLineupIncludeBench={state.bestLineupIncludeBench}
+        onSetBestLineupIncludeBench={handleSetupSetBestLineupIncludeBench}
         onStart={handleSetupStart}
       />
     );
@@ -111,6 +127,7 @@ export function App() {
       onReset={handleGameReset}
       onSetDraftTimerPaused={handleSetDraftTimerPaused}
       onSetPickPlayerName={handleSetPickPlayerName}
+      onUseBestLineupHint={handleUseBestLineupHint}
     />
   );
 }

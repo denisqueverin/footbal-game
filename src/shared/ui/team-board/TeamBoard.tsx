@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
+import { isNationalMode } from '@/entities/game/gameMode';
 import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/types';
 
 export interface TeamBoardProps {
@@ -12,6 +13,13 @@ export interface TeamBoardProps {
   disabled: boolean;
   selectedSlotId: string | null;
   onSelectSlot?: (slotId: string) => void;
+  /** Подсказка «Лучший состав» (клубы / сборные). */
+  bestLineupHint?: {
+    remaining: number;
+    budget: number;
+    usedThisRound: boolean;
+    onRequest: () => void;
+  } | null;
 }
 
 export function TeamBoard(props: TeamBoardProps) {
@@ -26,8 +34,43 @@ export function TeamBoard(props: TeamBoardProps) {
       aria-disabled={props.disabled}
     >
       <div style={styles.header}>
-        <div style={styles.teamName}>{props.team.name}</div>
-        <div style={styles.small}>{formationLabel(props.formation)}</div>
+        <div style={styles.headerMain}>
+          <div style={styles.teamName}>{props.team.name}</div>
+          <div style={styles.small}>{formationLabel(props.formation)}</div>
+        </div>
+        {props.bestLineupHint ? (
+          <div style={styles.hintCol}>
+            <div style={styles.hintCounter}>
+              Подсказки: {props.bestLineupHint.remaining} / {props.bestLineupHint.budget}
+            </div>
+            <button
+              type="button"
+              disabled={
+                props.bestLineupHint.remaining <= 0 || props.bestLineupHint.usedThisRound
+              }
+              onClick={props.bestLineupHint.onRequest}
+              style={{
+                ...styles.hintBtn,
+                ...(props.bestLineupHint.remaining <= 0 || props.bestLineupHint.usedThisRound
+                  ? styles.hintBtnUsed
+                  : null),
+              }}
+              title={
+                props.bestLineupHint.remaining <= 0
+                  ? 'Подсказки закончились'
+                  : props.bestLineupHint.usedThisRound
+                    ? 'В этом раунде подсказка уже использована'
+                    : undefined
+              }
+            >
+              {props.bestLineupHint.remaining <= 0
+                ? 'Нет подсказок'
+                : props.bestLineupHint.usedThisRound
+                  ? 'Уже в раунде'
+                  : 'Лучший состав'}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div style={{ ...styles.pitch, background: pitchBackground(props.team.colorScheme) }}>
@@ -44,7 +87,7 @@ export function TeamBoard(props: TeamBoardProps) {
               const isSelected = props.selectedSlotId === cell.slotId;
               const isTaken = Boolean(pick?.playerName);
               const flagUrl =
-                props.mode === 'national'
+                isNationalMode(props.mode)
                   ? getCountryFlagUrlRu(pick?.country)
                   : getClubFlagUrl(pick?.country);
               const sourceLabel = pick?.country ?? '';
@@ -123,12 +166,37 @@ const styles: Record<string, CSSProperties> = {
   header: {
     display: 'flex',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: 12,
     padding: 12,
     borderBottom: '1px solid rgba(255,255,255,0.10)',
     background: 'rgba(0,0,0,0.14)',
+    flexWrap: 'wrap',
   },
+  headerMain: { minWidth: 0, flex: '1 1 auto' },
   teamName: { fontWeight: 800, letterSpacing: -0.2 },
+  hintCol: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 },
+  hintCounter: { fontSize: 11, fontWeight: 700, opacity: 0.85, whiteSpace: 'nowrap' },
+  hintBtn: {
+    flexShrink: 0,
+    padding: '7px 10px',
+    borderRadius: 10,
+    border: '1px solid rgba(212, 175, 55, 0.45)',
+    background: 'linear-gradient(180deg, rgba(212, 175, 55, 0.18) 0%, rgba(10, 15, 24, 0.5) 100%)',
+    color: '#f2e6b8',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+  },
+  hintBtnUsed: {
+    opacity: 0.55,
+    cursor: 'not-allowed',
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(0,0,0,0.2)',
+    color: 'inherit',
+    fontWeight: 650,
+  },
   small: { opacity: 0.75, fontSize: 13 },
   pitch: {
     flex: '1 1 auto',

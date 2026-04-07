@@ -11,10 +11,13 @@ import {
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { roundTurnOrder } from '@/entities/game/turnOrder';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
+import { isNationalMode } from '@/entities/game/gameMode';
 import type { GameState, TeamId } from '@/entities/game/types';
 
 import { APP_VERSION } from '@/shared/config/version';
 import { schemeAccent } from '@/shared/lib/schemeAccent';
+import { BestLineupModal } from '@/shared/ui/best-lineup-modal';
+import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 import { RoundIntroModal } from '@/shared/ui/round-intro-modal';
 import { TeamBoard } from '@/shared/ui/team-board';
 
@@ -28,6 +31,7 @@ export interface GamePageProps {
   onReset: () => void;
   onSetDraftTimerPaused: (paused: boolean) => void;
   onSetPickPlayerName: (team: TeamId, slotId: string, playerName: string) => void;
+  onUseBestLineupHint: (team: TeamId) => void;
 }
 
 export function GamePage(props: GamePageProps) {
@@ -41,6 +45,8 @@ export function GamePage(props: GamePageProps) {
   const [roundModalExiting, setRoundModalExiting] = useState(false);
   /** Увеличивается при «Завершить редактирование» — заново показываем интро текущего раунда. */
   const [resumeModalEpoch, setResumeModalEpoch] = useState(0);
+  const [bestLineupOpen, setBestLineupOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const roundModalTimersRef = useRef<{ exit?: number; hide?: number }>({});
 
   const clearRoundModalTimers = useCallback(() => {
@@ -188,6 +194,10 @@ export function GamePage(props: GamePageProps) {
   );
 
   const handleResetClick = useCallback(() => {
+    setResetConfirmOpen(true);
+  }, []);
+
+  const handleResetConfirm = useCallback(() => {
     props.onReset();
   }, [props]);
 
@@ -207,8 +217,23 @@ export function GamePage(props: GamePageProps) {
     [props],
   );
 
+  const handleBestLineupRequest = useCallback(
+    (team: TeamId) => {
+      props.onUseBestLineupHint(team);
+      setBestLineupOpen(true);
+    },
+    [props],
+  );
+
   return (
     <div style={styles.page}>
+      <BestLineupModal
+        open={bestLineupOpen}
+        onClose={() => setBestLineupOpen(false)}
+        mode={state.mode}
+        currentSource={state.currentCountry}
+        includeBench={state.bestLineupIncludeBench}
+      />
       <RoundIntroModal
         key={`${state.roundIndex}-${state.currentCountry ?? ''}-${resumeModalEpoch}`}
         open={roundModalOpen}
@@ -217,6 +242,11 @@ export function GamePage(props: GamePageProps) {
         sourceLabel={state.currentCountry ?? ''}
         mode={state.mode}
         onClose={handleCloseRoundModal}
+      />
+      <ConfirmNewGameModal
+        open={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        onConfirm={handleResetConfirm}
       />
       <div style={styles.topbar}>
         <div style={styles.topbarLeft}>
@@ -287,6 +317,19 @@ export function GamePage(props: GamePageProps) {
                 selectedSlotId={activeTeam === teamId ? slotId : null}
                 onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
                 disabled={activeTeam !== teamId}
+                bestLineupHint={
+                  (state.mode === 'clubs' || isNationalMode(state.mode)) &&
+                  state.phase === 'drafting' &&
+                  !isEditingLineups &&
+                  Boolean(state.currentCountry)
+                    ? {
+                        remaining: state.hintsRemaining[teamId],
+                        budget: state.hintsBudgetPerPlayer,
+                        usedThisRound: state.hintUsedThisRound[teamId],
+                        onRequest: () => handleBestLineupRequest(teamId),
+                      }
+                    : null
+                }
               />
               {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
             </div>

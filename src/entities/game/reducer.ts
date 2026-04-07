@@ -1,9 +1,23 @@
 import { FORMATIONS, type FormationId } from './formations'
+import { isNationalMode } from './gameMode'
 import { TOP_50_EURO_CLUBS } from './topClubs'
-import type { ColorSchemeId, GameMode, GameState, SlotPick, TeamCount, TeamId, TeamState } from './types'
+import type {
+  ColorSchemeId,
+  GameMode,
+  GameState,
+  HintsBudget,
+  SlotPick,
+  TeamCount,
+  TeamId,
+  TeamState,
+} from './types'
 import { areTeamNamesPlaceholder, assignRandomTeamNames } from './teamNames'
 import { drawRandom } from './random'
-import { TOP_30_FOOTBALL_COUNTRIES_RU, pickRandomUnique } from './topCountries'
+import {
+  TOP_15_FOOTBALL_COUNTRIES_RU,
+  TOP_30_FOOTBALL_COUNTRIES_RU,
+  pickRandomUnique,
+} from './topCountries'
 import { roundTurnOrder } from './turnOrder'
 
 export type GameAction =
@@ -14,9 +28,12 @@ export type GameAction =
   | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
   | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
+  | { type: 'setup/setHintsBudget'; budget: HintsBudget }
+  | { type: 'setup/setBestLineupIncludeBench'; includeBench: boolean }
   | { type: 'draft/confirmPick'; team: TeamId; slotId: string; playerName: string }
   | { type: 'draft/setDraftTimerPaused'; paused: boolean }
   | { type: 'draft/setPickPlayerName'; team: TeamId; slotId: string; playerName: string }
+  | { type: 'draft/useBestLineupHint'; team: TeamId }
   | { type: 'game/reset' }
 
 const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
@@ -45,6 +62,14 @@ function slotPickForFormationSlot(team: TeamState, slotId: string): SlotPick | n
     }
   }
   return null
+}
+
+function createHintsRemaining(budget: number): Record<TeamId, number> {
+  return { team1: budget, team2: budget, team3: budget, team4: budget }
+}
+
+function createHintUsedThisRound(): Record<TeamId, boolean> {
+  return { team1: false, team2: false, team3: false, team4: false }
 }
 
 function makeEmptyTeam(
@@ -94,6 +119,7 @@ function drawNextCountry(state: GameState): GameState {
     currentCountry: item,
     countriesRemaining: rest,
     roundIndex: state.roundIndex + 1,
+    hintUsedThisRound: createHintUsedThisRound(),
   }
 }
 
@@ -102,8 +128,14 @@ export function createInitialGameState(): GameState {
     phase: 'setup',
     formationLocked: false,
     teamOrder: ['team1', 'team2'],
-    mode: 'national',
+    mode: 'nationalTop30',
     draftTurnOrderBase: 0,
+
+    bestLineupIncludeBench: true,
+
+    hintsBudgetPerPlayer: 1,
+    hintsRemaining: createHintsRemaining(1),
+    hintUsedThisRound: createHintUsedThisRound(),
 
     countriesAll: [],
     countriesRemaining: [],
@@ -163,6 +195,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
     }
+    case 'setup/setHintsBudget': {
+      if (state.phase !== 'setup') return state
+      return { ...state, hintsBudgetPerPlayer: action.budget }
+    }
+    case 'setup/setBestLineupIncludeBench': {
+      if (state.phase !== 'setup') return state
+      return { ...state, bestLineupIncludeBench: action.includeBench }
+    }
     case 'drawReveal/assignTeamNames': {
       if (state.phase !== 'drawReveal') return state
       if (!areTeamNamesPlaceholder(state)) return state
@@ -172,12 +212,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const items =
         state.mode === 'clubs'
           ? pickRandomUnique(TOP_50_EURO_CLUBS, state.maxRounds)
-          : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+          : state.mode === 'nationalTop15'
+            ? pickRandomUnique(TOP_15_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+            : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
       const order: TeamId[] =
         state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
 
       const n = order.length
       const draftTurnOrderBase = n > 0 ? Math.floor(Math.random() * n) : 0
+      const hintBudget = state.hintsBudgetPerPlayer
 
       const nextTeams: GameState['teams'] = { ...state.teams }
       for (const teamId of order) {
@@ -189,6 +232,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         phase: 'drawReveal',
         formationLocked: true,
         draftTurnOrderBase,
+        hintsRemaining: createHintsRemaining(hintBudget),
+        hintUsedThisRound: createHintUsedThisRound(),
         countriesAll: items,
         countriesRemaining: items,
         currentCountry: null,
@@ -230,6 +275,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         draftTimerPausedAt: null,
         draftTimerPausedAccumMs: state.draftTimerPausedAccumMs + delta,
+      }
+    }
+    case 'draft/useBestLineupHint': {
+      if (state.phase !== 'drafting') return state
+      if (state.mode !== 'clubs' && !isNationalMode(state.mode)) return state
+      if (!state.teamOrder.includes(action.team)) return state
+      if (state.hintsRemaining[action.team] <= 0) return state
+      if (state.hintUsedThisRound[action.team]) return state
+      return {
+        ...state,
+        hintsRemaining: {
+          ...state.hintsRemaining,
+          [action.team]: state.hintsRemaining[action.team] - 1,
+        },
+        hintUsedThisRound: {
+          ...state.hintUsedThisRound,
+          [action.team]: true,
+        },
       }
     }
     case 'draft/setPickPlayerName': {

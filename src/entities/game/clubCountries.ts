@@ -38,7 +38,7 @@ export const CLUB_TO_COUNTRY_RU: Record<string, string> = {
   'VfL Wolfsburg': 'Германия',
   'Werder Bremen': 'Германия',
   'Zenit Saint Petersburg': 'Россия',
-  Benfica: 'Португалия',
+  Valencia: 'Испания',
   'Leicester City': 'Англия',
   Galatasaray: 'Турция',
   'Fenerbahçe': 'Турция',
