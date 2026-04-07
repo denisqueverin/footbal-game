@@ -80,10 +80,6 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
         <div className="draw-reveal-version">v{APP_VERSION}</div>
         <div className="draw-reveal-badge">турнирная жеребьёвка</div>
         <h1 className="draw-reveal-title">Определение очерёдности ходов</h1>
-        <p className="draw-reveal-lead">
-          Случайным образом выбран порядок в первом раунде; в каждом следующем раунде первым ходит следующий игрок по
-          кругу.
-        </p>
 
         <div className="draw-reveal-stage" aria-live="polite">
           {!isReady ? (

@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties } from 'react';
+import { useCallback, useState } from 'react';
 
 import { FORMATIONS, type FormationId } from '@/entities/game/formations';
 import type { ColorSchemeId, GameState, TeamId } from '@/entities/game/types';
@@ -71,16 +71,19 @@ function TeamSummary(props: TeamSummaryProps) {
 
   return (
     <div
+      className="result-team"
       style={{
-        ...styles.team,
-        borderLeft: `3px solid ${accent}`,
+        borderLeft: `4px solid ${accent}`,
       }}
     >
-      <div style={styles.teamTitle}>{props.title}</div>
-      <div style={styles.colorRow} aria-label={`Цвет команды: ${schemeLabel(props.colorScheme)}`}>
-        <span style={{ ...styles.colorDot, background: dot, boxShadow: `0 0 0 1px ${accent}` }} />
+      <div className="result-team-title">{props.title}</div>
+      <div className="result-color-row" aria-label={`Цвет команды: ${schemeLabel(props.colorScheme)}`}>
+        <span
+          className="result-color-dot"
+          style={{ background: dot, boxShadow: `0 0 0 1px ${accent}` }}
+        />
       </div>
-      <div style={styles.list}>
+      <div className="result-list">
         {rows.flatMap((row) =>
           row.map((cell) => {
             const pick = props.picks[cell.slotId];
@@ -88,11 +91,13 @@ function TeamSummary(props: TeamSummaryProps) {
             const country = pick?.country ? ` (${pick.country})` : '';
 
             return (
-              <div key={cell.slotId} style={styles.item}>
-                <span style={{ ...styles.badge, borderColor: accent }}>{cell.label}</span>
-                <span style={styles.itemText}>
+              <div key={cell.slotId} className="result-item">
+                <span className="result-badge" style={{ borderColor: accent }}>
+                  {cell.label}
+                </span>
+                <span className="result-item-text">
                   {name}
-                  <span style={styles.muted}>{country}</span>
+                  <span className="result-muted">{country}</span>
                 </span>
               </div>
             );
@@ -120,19 +125,25 @@ export function ResultPage(props: ResultPageProps) {
   }, [state]);
 
   return (
-    <div style={styles.page}>
+    <div className="result-page">
       <ConfirmNewGameModal
         open={resetConfirmOpen}
         onClose={() => setResetConfirmOpen(false)}
         onConfirm={props.onReset}
       />
-      <div style={styles.card}>
-        <div style={styles.h1}>Игра завершена</div>
-        <div style={styles.sub}>Итоги по командам и выбранным схемам.</div>
+      <div className="result-card">
+        <div className="setup-kicker" style={{ marginBottom: 12 }}>
+          <span className="setup-kicker-icon" aria-hidden="true">
+            🏆
+          </span>
+          Финальный свисток
+        </div>
+        <h1 className="result-title">Игра завершена</h1>
+        <p className="result-sub">Итоги по командам и выбранным схемам.</p>
 
         <div
+          className="result-grid"
           style={{
-            ...styles.grid,
             gridTemplateColumns: `repeat(${Math.min(state.teamOrder.length, 4)}, minmax(0, 1fr))`,
           }}
         >
@@ -151,19 +162,19 @@ export function ResultPage(props: ResultPageProps) {
           })}
         </div>
 
-        <div style={styles.actions}>
-          <button type="button" onClick={handleCopyAll} style={styles.secondaryBtn}>
+        <div className="result-actions">
+          <button type="button" onClick={handleCopyAll} className="result-btn-secondary">
             {copyDone ? 'Скопировано' : 'Скопировать всё'}
           </button>
           <a
             href="https://chat.deepseek.com/"
             target="_blank"
             rel="noopener noreferrer"
-            style={styles.linkBtn}
+            className="result-btn-link"
           >
             Перейти к симуляции
           </a>
-          <button type="button" onClick={() => setResetConfirmOpen(true)} style={styles.primaryBtn}>
+          <button type="button" onClick={() => setResetConfirmOpen(true)} className="result-btn-primary">
             Новая игра
           </button>
         </div>
@@ -171,82 +182,3 @@ export function ResultPage(props: ResultPageProps) {
     </div>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: { minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24 },
-  card: {
-    width: 'min(1100px, 100%)',
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    padding: 20,
-    backdropFilter: 'blur(10px)',
-  },
-  h1: { fontSize: 28, fontWeight: 750, letterSpacing: -0.2 },
-  sub: { opacity: 0.85, marginTop: 6 },
-  grid: { display: 'grid', gap: 14, marginTop: 16 },
-  team: {
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    padding: 14,
-    background: 'rgba(0,0,0,0.18)',
-  },
-  teamTitle: { fontWeight: 750, marginBottom: 8 },
-  colorRow: { display: 'flex', alignItems: 'center', marginBottom: 10 },
-  colorDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 999,
-    flexShrink: 0,
-  },
-  list: { display: 'grid', gap: 8 },
-  item: { display: 'flex', gap: 10, alignItems: 'center' },
-  badge: {
-    fontSize: 12,
-    padding: '3px 8px',
-    borderRadius: 999,
-    border: '1px solid rgba(255,255,255,0.16)',
-    background: 'rgba(255,255,255,0.06)',
-    minWidth: 44,
-    textAlign: 'center',
-  },
-  itemText: { opacity: 0.95 },
-  muted: { opacity: 0.75 },
-  actions: {
-    marginTop: 16,
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  secondaryBtn: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.22)',
-    background: 'rgba(255,255,255,0.08)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-  linkBtn: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(120,200,255,0.45)',
-    background: 'rgba(80,160,255,0.15)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-    textDecoration: 'none',
-    display: 'inline-block',
-  },
-  primaryBtn: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(128,168,255,0.8)',
-    background: 'rgba(68,120,255,0.35)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-};

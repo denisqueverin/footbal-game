@@ -1,5 +1,4 @@
 import {
-  type CSSProperties,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -233,8 +232,14 @@ export function GamePage(props: GamePageProps) {
     [props],
   );
 
+  const sourceHeading = isChaosMode(state.mode)
+    ? 'Текущий источник'
+    : isClubsMode(state.mode)
+      ? 'Текущий клуб'
+      : 'Текущая страна';
+
   return (
-    <div style={styles.page}>
+    <div className="game-shell">
       <BestLineupModal
         open={bestLineupOpen}
         onClose={() => setBestLineupOpen(false)}
@@ -258,40 +263,32 @@ export function GamePage(props: GamePageProps) {
         onClose={() => setResetConfirmOpen(false)}
         onConfirm={handleResetConfirm}
       />
-      <div style={styles.topbar}>
-        <div style={styles.topbarLeft}>
-          <div style={styles.title}>
-            {isChaosMode(state.mode)
-              ? 'Текущий источник'
-              : isClubsMode(state.mode)
-                ? 'Текущий клуб'
-                : 'Текущая страна'}
-          </div>
-          <div style={styles.countryRow}>
-            <div style={styles.country}>
-              <b>{state.currentCountry ?? '—'}</b>
-            </div>
+      <div className="game-topbar">
+        <div className="game-topbar-left">
+          <p className="game-source-label">{sourceHeading}</p>
+          <div className="game-source-value">
+            <p className="game-source-name">{state.currentCountry ?? '—'}</p>
             {currentSourceFlagUrl ? (
-              <img src={currentSourceFlagUrl} alt="" style={styles.topbarFlag} width={36} height={24} />
+              <img src={currentSourceFlagUrl} alt="" className="game-topbar-flag" width={40} height={27} />
             ) : null}
           </div>
         </div>
 
-        <div style={styles.topbarCenter} aria-live="polite">
-          <div style={styles.timerCaption}>Время игры</div>
-          <div style={styles.timerValue}>{draftTimerLabel}</div>
+        <div className="game-topbar-center" aria-live="polite">
+          <p className="game-timer-cap">Время на поле</p>
+          <p className="game-timer-val">{draftTimerLabel}</p>
         </div>
 
-        <div style={styles.topbarRight}>
-          {!isEditingLineups ? <span style={styles.versionTag}>v{APP_VERSION}</span> : null}
+        <div className="game-topbar-right">
+          {!isEditingLineups ? <span className="game-version-tag">v{APP_VERSION}</span> : null}
           <button
             type="button"
             onClick={handleToggleEditLineups}
-            style={isEditingLineups ? styles.editBtnFinish : styles.ghostBtn}
+            className={isEditingLineups ? 'game-edit-done-btn' : 'game-ghost-btn'}
           >
             {isEditingLineups ? 'Завершить редактирование' : 'Редактировать составы'}
           </button>
-          <button type="button" onClick={handleResetClick} style={styles.ghostBtn}>
+          <button type="button" onClick={handleResetClick} className="game-ghost-btn">
             Новая игра
           </button>
         </div>
@@ -323,9 +320,9 @@ export function GamePage(props: GamePageProps) {
       {isEditingLineups ? (
         <LineupEditor state={state} onPickNameChange={handleLineupPickNameChange} />
       ) : (
-        <div style={styles.boards}>
+        <div className="game-boards">
           {state.teamOrder.map((teamId) => (
-            <div key={teamId} style={styles.side}>
+            <div key={teamId} className="game-side">
               <TeamBoard
                 team={state.teams[teamId]}
                 formation={state.teams[teamId].formation}
@@ -347,179 +344,45 @@ export function GamePage(props: GamePageProps) {
                     : null
                 }
               />
-              {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
+              {activeTeam !== teamId ? <div className="game-side-overlay" aria-hidden="true" /> : null}
             </div>
           ))}
         </div>
       )}
 
       {isEditingLineups ? (
-        <div style={styles.bottomHintOnly}>
-          <div style={styles.hint}>
+        <div className="game-bottom-hint-only">
+          <div className="game-hint">
             Редактируйте имена в списке выше и нажмите «Завершить редактирование», чтобы продолжить игру.
           </div>
         </div>
       ) : (
-        <div style={styles.bottom}>
-          <div style={styles.formRow}>
+        <div className="game-bottom">
+          <div className="game-form-row">
             <input
               value={playerName}
               onChange={handlePlayerNameChange}
               onKeyDown={handlePlayerNameKeyDown}
               placeholder="Имя футболиста (свободный ввод)"
-              style={styles.input}
+              className="game-input"
             />
-            <div style={styles.slotPreview}>
-              Слот: <b>{slotId ?? 'не выбран'}</b>
+            <div className="game-slot-preview">
+              Слот: <strong>{slotId ?? 'не выбран'}</strong>
             </div>
             <button
               type="button"
               onClick={handleConfirmPick}
               disabled={!canConfirm}
-              style={{
-                ...styles.primaryBtn,
-                ...(!canConfirm ? styles.primaryBtnDisabled : null),
-              }}
+              className="game-confirm-btn"
             >
               Подтвердить
             </button>
           </div>
-          <div style={styles.hint}>
-            Выберите свободный слот на активной стороне и введите имя игрока, затем нажмите «Подтвердить».
+          <div className="game-hint">
+            Выберите свободный слот на активной стороне, введите имя игрока и нажмите «Подтвердить».
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: { minHeight: '100vh', display: 'flex', flexDirection: 'column' },
-  topbar: {
-    display: 'grid',
-    gridTemplateColumns: '1fr auto 1fr',
-    alignItems: 'center',
-    gap: 12,
-    padding: '16px 18px',
-    borderBottom: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.04)',
-    backdropFilter: 'blur(10px)',
-  },
-  topbarLeft: { minWidth: 0 },
-  topbarCenter: {
-    textAlign: 'center',
-    justifySelf: 'center',
-  },
-  timerCaption: {
-    fontSize: 11,
-    fontWeight: 750,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    opacity: 0.65,
-  },
-  timerValue: {
-    fontSize: 22,
-    fontWeight: 800,
-    fontVariantNumeric: 'tabular-nums',
-    color: '#b8e0ff',
-    textShadow: '0 0 20px rgba(100, 180, 255, 0.25)',
-    marginTop: 2,
-  },
-  title: { fontWeight: 750, letterSpacing: -0.2 },
-  countryRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
-    minWidth: 0,
-    flexWrap: 'wrap',
-  },
-  topbarFlag: {
-    flexShrink: 0,
-    borderRadius: 4,
-    border: '1px solid rgba(0,0,0,0.35)',
-    objectFit: 'cover',
-  },
-  country: { opacity: 0.9 },
-  topbarRight: {
-    display: 'flex',
-    gap: 12,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    justifyContent: 'end',
-    justifySelf: 'end',
-  },
-  ghostBtn: {
-    padding: '8px 10px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'transparent',
-    color: 'inherit',
-    cursor: 'pointer',
-    opacity: 0.85,
-  },
-  /** Яркая кнопка выхода из режима редактирования (вход — обычный ghost, как «Новая игра»). */
-  editBtnFinish: {
-    padding: '9px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(120, 220, 160, 0.5)',
-    background: 'linear-gradient(180deg, rgba(80, 200, 130, 0.95) 0%, rgba(30, 120, 75, 0.95) 100%)',
-    color: '#f4fff8',
-    cursor: 'pointer',
-    fontWeight: 750,
-    boxShadow: '0 2px 14px rgba(60, 200, 120, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-  },
-  boards: {
-    flex: '1 1 auto',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: 14,
-    padding: 14,
-    alignItems: 'stretch',
-  },
-  side: { position: 'relative', minHeight: 360 },
-  overlay: {
-    position: 'absolute',
-    inset: 0,
-    background: 'rgba(0,0,0,0.55)',
-    border: '1px solid rgba(255,255,255,0.10)',
-    borderRadius: 16,
-    pointerEvents: 'auto',
-  },
-  bottom: {
-    borderTop: '1px solid rgba(255,255,255,0.12)',
-    padding: '14px 18px',
-    background: 'rgba(255,255,255,0.04)',
-    backdropFilter: 'blur(10px)',
-  },
-  bottomHintOnly: {
-    borderTop: '1px solid rgba(255,255,255,0.12)',
-    padding: '12px 18px 16px',
-    background: 'rgba(255,255,255,0.03)',
-    backdropFilter: 'blur(10px)',
-  },
-  formRow: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' },
-  input: {
-    flex: '1 1 320px',
-    minWidth: 260,
-    padding: '10px 12px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.24)',
-    color: 'inherit',
-    outline: 'none',
-  },
-  slotPreview: { opacity: 0.9 },
-  primaryBtn: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(128,168,255,0.8)',
-    background: 'rgba(68,120,255,0.35)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-  primaryBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
-  hint: { marginTop: 8, opacity: 0.75, fontSize: 13 },
-  versionTag: { fontSize: 12, opacity: 0.55, marginRight: 4 },
-};
