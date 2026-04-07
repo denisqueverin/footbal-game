@@ -1,4 +1,4 @@
-export { gameReducer, initialGameState } from './reducer';
+export { createInitialGameState, gameReducer } from './reducer';
 export type { GameAction } from './reducer';
 export type {
   ColorSchemeId,

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 
+import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
 import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/types';
@@ -42,7 +43,11 @@ export function TeamBoard(props: TeamBoardProps) {
               const pick = props.team.picksBySlotId[cell.slotId];
               const isSelected = props.selectedSlotId === cell.slotId;
               const isTaken = Boolean(pick?.playerName);
-              const flagUrl = props.mode === 'national' ? getCountryFlagUrlRu(pick?.country) : null;
+              const flagUrl =
+                props.mode === 'national'
+                  ? getCountryFlagUrlRu(pick?.country)
+                  : getClubFlagUrl(pick?.country);
+              const sourceLabel = pick?.country ?? '';
 
               return (
                 <button
@@ -56,21 +61,25 @@ export function TeamBoard(props: TeamBoardProps) {
                     ...(isSelected ? styles.slotSelected : null),
                     ...(props.disabled ? styles.slotDisabled : null),
                   }}
-                  title={isTaken ? `${pick?.playerName ?? '—'} (${pick?.country ?? '—'})` : 'Выбрать слот'}
+                  title={
+                    isTaken
+                      ? `${pick?.playerName ?? '—'} (${sourceLabel || '—'})`
+                      : 'Выбрать слот'
+                  }
                 >
-                  <div style={styles.slotLabel}>
-                    {cell.label}
+                  <div style={styles.slotLabel}>{cell.label}</div>
+                  <div style={styles.slotName}>{pick?.playerName ?? '—'}</div>
+                  <div style={styles.slotMeta}>
+                    {sourceLabel ? <span style={styles.slotMetaText}>{sourceLabel}</span> : null}
                     {flagUrl ? (
                       <img
                         src={flagUrl}
-                        alt={pick?.country ?? ''}
+                        alt=""
                         style={styles.flagImg}
                         loading="lazy"
                       />
                     ) : null}
                   </div>
-                  <div style={styles.slotName}>{pick?.playerName ?? '—'}</div>
-                  <div style={styles.slotCountry}>{pick?.country ?? ''}</div>
                 </button>
               );
             })}
@@ -144,9 +153,19 @@ const styles: Record<string, CSSProperties> = {
   slotDisabled: { cursor: 'not-allowed' },
   slotTaken: { border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(0,0,0,0.32)' },
   slotSelected: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
-  slotLabel: { fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  slotLabel: { fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   slotName: { fontWeight: 750, fontSize: 14, lineHeight: 1.15 },
-  slotCountry: { fontSize: 12, opacity: 0.75 },
+  slotMeta: {
+    fontSize: 12,
+    opacity: 0.8,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    minHeight: 18,
+  },
+  slotMetaText: { lineHeight: 1.2 },
   flagImg: {
     width: 18,
     height: 12,

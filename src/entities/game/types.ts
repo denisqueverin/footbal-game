@@ -41,5 +41,12 @@ export type GameState = {
 
   turn: TeamId
   teams: Record<TeamId, TeamState>
+
+  /** Метка времени старта драфта (performance.now-совместимо: Date.now). */
+  draftTimerStartedAt: number | null
+  /** Пока не null — таймер на паузе (режим редактирования составов). */
+  draftTimerPausedAt: number | null
+  /** Накопленная пауза (мс), без текущего интервала draftTimerPausedAt. */
+  draftTimerPausedAccumMs: number
 }
 

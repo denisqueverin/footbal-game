@@ -1,19 +1,22 @@
 import { FORMATIONS, type FormationId } from './formations'
 import { TOP_50_EURO_CLUBS } from './topClubs'
 import type { ColorSchemeId, GameMode, GameState, SlotPick, TeamCount, TeamId, TeamState } from './types'
+import { areTeamNamesPlaceholder, assignRandomTeamNames } from './teamNames'
 import { drawRandom } from './random'
 import { TOP_30_FOOTBALL_COUNTRIES_RU, pickRandomUnique } from './topCountries'
 import { roundTurnOrder } from './turnOrder'
 
 export type GameAction =
   | { type: 'setup/start' }
+  | { type: 'drawReveal/assignTeamNames' }
   | { type: 'drawReveal/continue' }
   | { type: 'setup/setMode'; mode: GameMode }
   | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
-  | { type: 'setup/setTeamName'; team: TeamId; name: string }
   | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
   | { type: 'draft/confirmPick'; team: TeamId; slotId: string; playerName: string }
+  | { type: 'draft/setDraftTimerPaused'; paused: boolean }
+  | { type: 'draft/setPickPlayerName'; team: TeamId; slotId: string; playerName: string }
   | { type: 'game/reset' }
 
 const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
@@ -22,25 +25,26 @@ function teamOrderForCount(count: TeamCount): TeamId[] {
   return ALL_TEAMS.slice(0, count)
 }
 
-function fallbackTeamName(team: TeamId): string {
-  switch (team) {
-    case 'team1':
-      return 'Команда 1'
-    case 'team2':
-      return 'Команда 2'
-    case 'team3':
-      return 'Команда 3'
-    case 'team4':
-      return 'Команда 4'
-    default:
-      return 'Команда'
-  }
-}
-
 function nextTeamId(current: TeamId, order: TeamId[]): TeamId {
   const idx = order.indexOf(current)
   if (idx < 0) return order[0] ?? current
   return order[(idx + 1) % order.length] ?? current
+}
+
+function slotPickForFormationSlot(team: TeamState, slotId: string): SlotPick | null {
+  for (const row of FORMATIONS[team.formation].rows) {
+    for (const cell of row) {
+      if (cell.slotId === slotId) {
+        return {
+          slotId: cell.slotId,
+          label: cell.label,
+          playerName: null,
+          country: null,
+        }
+      }
+    }
+  }
+  return null
 }
 
 function makeEmptyTeam(
@@ -93,32 +97,39 @@ function drawNextCountry(state: GameState): GameState {
   }
 }
 
-export const initialGameState: GameState = {
-  phase: 'setup',
-  formationLocked: false,
-  teamOrder: ['team1', 'team2'],
-  mode: 'national',
-  draftTurnOrderBase: 0,
+export function createInitialGameState(): GameState {
+  const base: GameState = {
+    phase: 'setup',
+    formationLocked: false,
+    teamOrder: ['team1', 'team2'],
+    mode: 'national',
+    draftTurnOrderBase: 0,
 
-  countriesAll: [],
-  countriesRemaining: [],
-  currentCountry: null,
-  roundIndex: 0,
-  maxRounds: 11,
+    countriesAll: [],
+    countriesRemaining: [],
+    currentCountry: null,
+    roundIndex: 0,
+    maxRounds: 11,
 
-  turn: 'team1',
-  teams: {
-    team1: makeEmptyTeam('team1', '1-4-3-3', 'Команда 1', 'green'),
-    team2: makeEmptyTeam('team2', '1-4-3-3', 'Команда 2', 'red'),
-    team3: makeEmptyTeam('team3', '1-4-3-3', 'Команда 3', 'blue'),
-    team4: makeEmptyTeam('team4', '1-4-3-3', 'Команда 4', 'white'),
-  },
+    turn: 'team1',
+    teams: {
+      team1: makeEmptyTeam('team1', '1-4-3-3', 'Команда 1', 'green'),
+      team2: makeEmptyTeam('team2', '1-4-3-3', 'Команда 2', 'red'),
+      team3: makeEmptyTeam('team3', '1-4-3-3', 'Команда 3', 'blue'),
+      team4: makeEmptyTeam('team4', '1-4-3-3', 'Команда 4', 'white'),
+    },
+
+    draftTimerStartedAt: null,
+    draftTimerPausedAt: null,
+    draftTimerPausedAccumMs: 0,
+  }
+  return base
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'game/reset': {
-      return initialGameState
+      return createInitialGameState()
     }
     case 'setup/setMode': {
       if (state.phase !== 'setup') return state
@@ -142,20 +153,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
     }
-    case 'setup/setTeamName': {
-      if (state.phase !== 'setup') return state
-      const name = action.name.trim()
-      return {
-        ...state,
-        teams: {
-          ...state.teams,
-          [action.team]: {
-            ...state.teams[action.team],
-            name: name.length > 0 ? name : fallbackTeamName(action.team),
-          },
-        },
-      }
-    }
     case 'setup/setTeamColorScheme': {
       if (state.phase !== 'setup') return state
       return {
@@ -165,6 +162,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           [action.team]: { ...state.teams[action.team], colorScheme: action.scheme },
         },
       }
+    }
+    case 'drawReveal/assignTeamNames': {
+      if (state.phase !== 'drawReveal') return state
+      if (!areTeamNamesPlaceholder(state)) return state
+      return assignRandomTeamNames(state)
     }
     case 'setup/start': {
       const items =
@@ -193,6 +195,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         roundIndex: 0,
         turn: order[0] ?? 'team1',
         teams: nextTeams,
+        draftTimerStartedAt: null,
+        draftTimerPausedAt: null,
+        draftTimerPausedAccumMs: 0,
       }
     }
     case 'drawReveal/continue': {
@@ -203,7 +208,66 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...drawn, phase: 'finished' }
       }
       const first = roundTurnOrder(drawn.teamOrder, drawn.draftTurnOrderBase, drawn.roundIndex)[0]
-      return { ...drawn, turn: first ?? drawn.turn }
+      const startedAt = drawn.draftTimerStartedAt ?? Date.now()
+      return {
+        ...drawn,
+        turn: first ?? drawn.turn,
+        draftTimerStartedAt: startedAt,
+        draftTimerPausedAt: null,
+        draftTimerPausedAccumMs: drawn.draftTimerPausedAccumMs,
+      }
+    }
+    case 'draft/setDraftTimerPaused': {
+      if (state.phase !== 'drafting') return state
+      if (action.paused) {
+        if (state.draftTimerPausedAt != null) return state
+        return { ...state, draftTimerPausedAt: Date.now() }
+      }
+      if (state.draftTimerPausedAt == null) return state
+      const now = Date.now()
+      const delta = now - state.draftTimerPausedAt
+      return {
+        ...state,
+        draftTimerPausedAt: null,
+        draftTimerPausedAccumMs: state.draftTimerPausedAccumMs + delta,
+      }
+    }
+    case 'draft/setPickPlayerName': {
+      if (state.phase !== 'drafting') return state
+      const team = state.teams[action.team]
+      let existing = team.picksBySlotId[action.slotId]
+      if (!existing) {
+        const created = slotPickForFormationSlot(team, action.slotId)
+        if (!created) return state
+        existing = created
+      }
+
+      const trimmed = action.playerName.trim()
+      // Не сбрасываем country при пустом имени: при наборе текста имя временно пустое,
+      // иначе клуб/страна драфта теряются до следующего сохранения.
+      const nextPick: SlotPick =
+        trimmed.length === 0
+          ? { ...existing, playerName: null, country: existing.country }
+          : { ...existing, playerName: trimmed, country: existing.country }
+
+      const nextTeam: TeamState = {
+        ...team,
+        picksBySlotId: {
+          ...team.picksBySlotId,
+          [action.slotId]: nextPick,
+        },
+      }
+
+      const nextState: GameState = {
+        ...state,
+        teams: { ...state.teams, [action.team]: nextTeam },
+      }
+
+      if (allActiveTeamsFull(nextState)) {
+        return { ...nextState, phase: 'finished' }
+      }
+
+      return nextState
     }
     case 'draft/confirmPick': {
       if (state.phase !== 'drafting') return state

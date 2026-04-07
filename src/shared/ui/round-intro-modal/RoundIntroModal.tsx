@@ -1,5 +1,7 @@
 import type { MouseEvent } from 'react';
 
+import { getClubFlagUrl } from '@/entities/game/clubCountries';
+import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
 import type { GameMode } from '@/entities/game/types';
 
 export interface RoundIntroModalProps {
@@ -22,6 +24,11 @@ export function RoundIntroModal(props: RoundIntroModalProps) {
 
   const sourceHeading =
     props.mode === 'clubs' ? 'Клуб, из которого вы выбираете' : 'Страна, из которой вы выбираете';
+
+  const flagUrl =
+    props.mode === 'clubs'
+      ? getClubFlagUrl(props.sourceLabel)
+      : getCountryFlagUrlRu(props.sourceLabel);
 
   return (
     <div
@@ -48,7 +55,19 @@ export function RoundIntroModal(props: RoundIntroModalProps) {
           </div>
           <div className="round-modal-source">
             <div className="round-modal-source-label">{sourceHeading}</div>
-            <div className="round-modal-source-name">{props.sourceLabel}</div>
+            <div className="round-modal-source-main">
+              <div className="round-modal-source-name">{props.sourceLabel}</div>
+              {flagUrl ? (
+                <img
+                  className="round-modal-flag"
+                  src={flagUrl}
+                  alt=""
+                  width={44}
+                  height={30}
+                  loading="eager"
+                />
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
