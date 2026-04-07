@@ -91,7 +91,6 @@ export function SetupScreen(props: Props) {
         </div>
 
         <div style={styles.section}>
-        <div style={styles.section}>
           <div style={styles.actions}>
             <button
               type="button"
