@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { GameState, TeamId } from '../game/types'
 import { TeamBoard } from '../ui/TeamBoard'
 
@@ -22,6 +22,10 @@ export function GameScreen(props: Props) {
     return Boolean(state.currentCountry) && Boolean(slotId) && !activeSlotTaken && playerName.trim().length > 0
   }, [activeSlotTaken, playerName, slotId, state.currentCountry])
 
+  useEffect(() => {
+    setSlotId(null)
+  }, [activeTeam])
+
   function confirm() {
     if (!slotId) return
     props.onConfirmPick(activeTeam, slotId, playerName)
@@ -33,7 +37,7 @@ export function GameScreen(props: Props) {
     <div style={styles.page}>
       <div style={styles.topbar}>
         <div>
-          <div style={styles.title}>Текущая страна</div>
+          <div style={styles.title}>{state.mode === 'clubs' ? 'Текущий клуб' : 'Текущая страна'}</div>
           <div style={styles.country}>
             <b>{state.currentCountry ?? '—'}</b>
           </div>
@@ -47,27 +51,19 @@ export function GameScreen(props: Props) {
       </div>
 
       <div style={styles.boards}>
-        <div style={styles.side}>
-          <TeamBoard
-            team={state.teams.team1}
-            formation={state.teams.team1.formation}
-            selectedSlotId={activeTeam === 'team1' ? slotId : null}
-            onSelectSlot={activeTeam === 'team1' ? setSlotId : undefined}
-            disabled={activeTeam !== 'team1'}
-          />
-          {activeTeam !== 'team1' ? <div style={styles.overlay} aria-hidden="true" /> : null}
-        </div>
-
-        <div style={styles.side}>
-          <TeamBoard
-            team={state.teams.team2}
-            formation={state.teams.team2.formation}
-            selectedSlotId={activeTeam === 'team2' ? slotId : null}
-            onSelectSlot={activeTeam === 'team2' ? setSlotId : undefined}
-            disabled={activeTeam !== 'team2'}
-          />
-          {activeTeam !== 'team2' ? <div style={styles.overlay} aria-hidden="true" /> : null}
-        </div>
+        {state.teamOrder.map((teamId) => (
+          <div key={teamId} style={styles.side}>
+            <TeamBoard
+              team={state.teams[teamId]}
+              formation={state.teams[teamId].formation}
+              mode={state.mode}
+              selectedSlotId={activeTeam === teamId ? slotId : null}
+              onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
+              disabled={activeTeam !== teamId}
+            />
+            {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
+          </div>
+        ))}
       </div>
 
       <div style={styles.bottom}>
@@ -75,6 +71,12 @@ export function GameScreen(props: Props) {
           <input
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              if (!canConfirm) return
+              e.preventDefault()
+              confirm()
+            }}
             placeholder="Имя футболиста (свободный ввод)"
             style={styles.input}
           />
@@ -124,7 +126,7 @@ const styles: Record<string, React.CSSProperties> = {
   boards: {
     flex: '1 1 auto',
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
     gap: 14,
     padding: 14,
     alignItems: 'stretch',

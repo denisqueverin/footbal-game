@@ -1,17 +1,52 @@
 import { FORMATIONS, type FormationId } from './formations'
-import type { GameState, SlotPick, TeamId, TeamState } from './types'
+import { TOP_50_EURO_CLUBS } from './topClubs'
+import type { ColorSchemeId, GameMode, GameState, SlotPick, TeamCount, TeamId, TeamState } from './types'
 import { drawRandom } from './random'
 import { TOP_30_FOOTBALL_COUNTRIES_RU, pickRandomUnique } from './topCountries'
 
 export type GameAction =
   | { type: 'setup/start' }
+  | { type: 'setup/setMode'; mode: GameMode }
+  | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
   | { type: 'setup/setTeamName'; team: TeamId; name: string }
-  | { type: 'setup/setTeamColor'; team: TeamId; color: string }
+  | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
   | { type: 'draft/confirmPick'; team: TeamId; slotId: string; playerName: string }
   | { type: 'game/reset' }
 
-function makeEmptyTeam(team: TeamId, formation: FormationId): TeamState {
+const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
+
+function teamOrderForCount(count: TeamCount): TeamId[] {
+  return ALL_TEAMS.slice(0, count)
+}
+
+function fallbackTeamName(team: TeamId): string {
+  switch (team) {
+    case 'team1':
+      return 'Команда 1'
+    case 'team2':
+      return 'Команда 2'
+    case 'team3':
+      return 'Команда 3'
+    case 'team4':
+      return 'Команда 4'
+    default:
+      return 'Команда'
+  }
+}
+
+function nextTeamId(current: TeamId, order: TeamId[]): TeamId {
+  const idx = order.indexOf(current)
+  if (idx < 0) return order[0] ?? current
+  return order[(idx + 1) % order.length] ?? current
+}
+
+function makeEmptyTeam(
+  team: TeamId,
+  formation: FormationId,
+  name: string,
+  colorScheme: ColorSchemeId,
+): TeamState {
   const picksBySlotId: Record<string, SlotPick> = {}
   for (const row of FORMATIONS[formation].rows) {
     for (const cell of row) {
@@ -25,10 +60,10 @@ function makeEmptyTeam(team: TeamId, formation: FormationId): TeamState {
   }
   return {
     id: team,
-    name: team === 'team1' ? 'Команда 1' : team === 'team2' ? 'Команда 2' : team === 'team3' ? 'Команда 3' : 'Команда 4',
+    name,
     formation,
+    colorScheme,
     picksBySlotId,
-    color: 'green',
   }
 }
 
@@ -36,8 +71,8 @@ function isTeamFull(team: TeamState): boolean {
   return Object.values(team.picksBySlotId).every((p) => Boolean(p.playerName))
 }
 
-function isAllTeamsFull(state: GameState): boolean {
-  return isTeamFull(state.teams.team1) && isTeamFull(state.teams.team2) && isTeamFull(state.teams.team3) && isTeamFull(state.teams.team4)
+function allActiveTeamsFull(state: GameState): boolean {
+  return state.teamOrder.every((id) => isTeamFull(state.teams[id]))
 }
 
 function drawNextCountry(state: GameState): GameState {
@@ -59,6 +94,8 @@ function drawNextCountry(state: GameState): GameState {
 export const initialGameState: GameState = {
   phase: 'setup',
   formationLocked: false,
+  teamOrder: ['team1', 'team2'],
+  mode: 'national',
 
   countriesAll: [],
   countriesRemaining: [],
@@ -68,10 +105,10 @@ export const initialGameState: GameState = {
 
   turn: 'team1',
   teams: {
-    team1: makeEmptyTeam('team1', '1-4-3-3'),
-    team2: makeEmptyTeam('team2', '1-4-3-3'),
-    team3: makeEmptyTeam('team3', '1-4-3-3'),
-    team4: makeEmptyTeam('team4', '1-4-3-3'),
+    team1: makeEmptyTeam('team1', '1-4-3-3', 'Команда 1', 'green'),
+    team2: makeEmptyTeam('team2', '1-4-3-3', 'Команда 2', 'red'),
+    team3: makeEmptyTeam('team3', '1-4-3-3', 'Команда 3', 'blue'),
+    team4: makeEmptyTeam('team4', '1-4-3-3', 'Команда 4', 'white'),
   },
 }
 
@@ -80,6 +117,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'game/reset': {
       return initialGameState
     }
+    case 'setup/setMode': {
+      if (state.phase !== 'setup') return state
+      return { ...state, mode: action.mode }
+    }
+    case 'setup/setTeamCount': {
+      if (state.phase !== 'setup') return state
+      const nextOrder = teamOrderForCount(action.count)
+      return { ...state, teamOrder: nextOrder, turn: nextOrder[0] ?? 'team1' }
+    }
     case 'setup/setTeamFormation': {
       if (state.formationLocked) return state
       if (state.phase !== 'setup') return state
@@ -87,44 +133,59 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const team = action.team
       return {
         ...state,
-        teams: { ...state.teams, [team]: { ...state.teams[team], formation } },
+        teams: {
+          ...state.teams,
+          [team]: makeEmptyTeam(team, formation, state.teams[team].name, state.teams[team].colorScheme),
+        },
       }
     }
     case 'setup/setTeamName': {
       if (state.phase !== 'setup') return state
-      const name = action.name
-      const team = action.team
+      const name = action.name.trim()
       return {
         ...state,
-        teams: { ...state.teams, [team]: { ...state.teams[team], name } },
+        teams: {
+          ...state.teams,
+          [action.team]: {
+            ...state.teams[action.team],
+            name: name.length > 0 ? name : fallbackTeamName(action.team),
+          },
+        },
       }
     }
-    case 'setup/setTeamColor': {
+    case 'setup/setTeamColorScheme': {
       if (state.phase !== 'setup') return state
-      const color = action.color
-      const team = action.team
       return {
         ...state,
-        teams: { ...state.teams, [team]: { ...state.teams[team], color } },
+        teams: {
+          ...state.teams,
+          [action.team]: { ...state.teams[action.team], colorScheme: action.scheme },
+        },
       }
     }
     case 'setup/start': {
-      const countries = pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+      const items =
+        state.mode === 'clubs'
+          ? pickRandomUnique(TOP_50_EURO_CLUBS, state.maxRounds)
+          : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+      const order: TeamId[] =
+        state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
+
+      const nextTeams: GameState['teams'] = { ...state.teams }
+      for (const teamId of order) {
+        const prev = state.teams[teamId]
+        nextTeams[teamId] = makeEmptyTeam(teamId, prev.formation, prev.name, prev.colorScheme)
+      }
       const base: GameState = {
         ...state,
         phase: 'drafting',
         formationLocked: true,
-        countriesAll: countries,
-        countriesRemaining: countries,
+        countriesAll: items,
+        countriesRemaining: items,
         currentCountry: null,
         roundIndex: 0,
-        turn: 'team1',
-        teams: {
-          team1: makeEmptyTeam('team1', state.teams.team1.formation),
-          team2: makeEmptyTeam('team2', state.teams.team2.formation),
-          team3: makeEmptyTeam('team3', state.teams.team3.formation),
-          team4: makeEmptyTeam('team4', state.teams.team4.formation),
-        },
+        turn: order[0] ?? 'team1',
+        teams: nextTeams,
       }
       return drawNextCountry(base)
     }
@@ -132,6 +193,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase !== 'drafting') return state
       if (state.turn !== action.team) return state
       if (!state.currentCountry) return state
+      if (!state.teamOrder.includes(action.team)) return state
 
       const playerName = action.playerName.trim()
       if (playerName.length === 0) return state
@@ -159,20 +221,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         teams: { ...state.teams, [action.team]: nextTeam },
       }
 
-      if (isAllTeamsFull(nextState)) {
+      if (allActiveTeamsFull(nextState)) {
         return { ...nextState, phase: 'finished' }
       }
 
-      if (action.team === 'team1') {
-        return { ...nextState, turn: 'team2' };
-      } else if (action.team === 'team2') {
-        return { ...nextState, turn: 'team3' };
-      } else if (action.team === 'team3') {
-        return { ...nextState, turn: 'team4' };
+      const nextTurn = nextTeamId(action.team, nextState.teamOrder)
+      const first = nextState.teamOrder[0] ?? nextTurn
+      if (nextTurn !== first) {
+        return { ...nextState, turn: nextTurn }
       }
 
-      // team4 confirmed: advance to next country and back to team1
-      const advanced = drawNextCountry({ ...nextState, turn: 'team1' })
+      // last team confirmed: advance to next item and back to first team
+      const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
         return { ...advanced, phase: 'finished' }
       }

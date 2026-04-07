@@ -4,10 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
-
-# SPA fallback (for client-side routing). Safe even without a router.
+# SPA fallback (safe even without a router).
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
