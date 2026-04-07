@@ -1,6 +1,8 @@
 import { FORMATIONS, type FormationId } from './formations'
-import { isNationalMode } from './gameMode'
+import { buildChaosDraftPool } from './chaosDraftPool'
+import { supportsBestLineupHint } from './gameMode'
 import { TOP_50_EURO_CLUBS } from './topClubs'
+import { RPL_CLUBS } from './rplClubs'
 import type {
   ColorSchemeId,
   GameMode,
@@ -108,15 +110,35 @@ function allActiveTeamsFull(state: GameState): boolean {
 
 function drawNextCountry(state: GameState): GameState {
   if (state.roundIndex >= state.maxRounds) {
-    return { ...state, currentCountry: null }
+    return { ...state, currentCountry: null, currentDraftSourceKind: null }
   }
   if (state.countriesRemaining.length === 0) {
-    return { ...state, currentCountry: null }
+    return { ...state, currentCountry: null, currentDraftSourceKind: null }
   }
+
+  if (state.mode === 'chaos') {
+    const n = state.countriesRemaining.length
+    const idx = Math.floor(Math.random() * n)
+    const label = state.countriesRemaining[idx]!
+    const kind = state.chaosDraftSourceKindsRemaining[idx]!
+    const rest = state.countriesRemaining.filter((_, i) => i !== idx)
+    const restKinds = state.chaosDraftSourceKindsRemaining.filter((_, i) => i !== idx)
+    return {
+      ...state,
+      currentCountry: label,
+      currentDraftSourceKind: kind,
+      countriesRemaining: rest,
+      chaosDraftSourceKindsRemaining: restKinds,
+      roundIndex: state.roundIndex + 1,
+      hintUsedThisRound: createHintUsedThisRound(),
+    }
+  }
+
   const { item, rest } = drawRandom(state.countriesRemaining)
   return {
     ...state,
     currentCountry: item,
+    currentDraftSourceKind: null,
     countriesRemaining: rest,
     roundIndex: state.roundIndex + 1,
     hintUsedThisRound: createHintUsedThisRound(),
@@ -139,7 +161,10 @@ export function createInitialGameState(): GameState {
 
     countriesAll: [],
     countriesRemaining: [],
+    chaosDraftSourceKindsRemaining: [],
+    chaosDraftSourceKindsAll: [],
     currentCountry: null,
+    currentDraftSourceKind: null,
     roundIndex: 0,
     maxRounds: 11,
 
@@ -209,12 +234,22 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return assignRandomTeamNames(state)
     }
     case 'setup/start': {
+      const chaosPicks =
+        state.mode === 'chaos' ? pickRandomUnique(buildChaosDraftPool(), state.maxRounds) : null
       const items =
-        state.mode === 'clubs'
-          ? pickRandomUnique(TOP_50_EURO_CLUBS, state.maxRounds)
-          : state.mode === 'nationalTop15'
-            ? pickRandomUnique(TOP_15_FOOTBALL_COUNTRIES_RU, state.maxRounds)
-            : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+        chaosPicks != null
+          ? chaosPicks.map((p) => p.label)
+          : state.mode === 'rpl'
+            ? pickRandomUnique(RPL_CLUBS, state.maxRounds)
+            : state.mode === 'clubs'
+              ? pickRandomUnique(TOP_50_EURO_CLUBS, state.maxRounds)
+              : state.mode === 'nationalTop15'
+                ? pickRandomUnique(TOP_15_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+                : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+      const chaosKindsAll =
+        chaosPicks != null ? chaosPicks.map((p) => p.kind) : ([] as GameState['chaosDraftSourceKindsAll'])
+      const chaosKindsRemaining =
+        chaosPicks != null ? [...chaosKindsAll] : ([] as GameState['chaosDraftSourceKindsRemaining'])
       const order: TeamId[] =
         state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
 
@@ -236,7 +271,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         hintUsedThisRound: createHintUsedThisRound(),
         countriesAll: items,
         countriesRemaining: items,
+        chaosDraftSourceKindsAll: chaosKindsAll,
+        chaosDraftSourceKindsRemaining: chaosKindsRemaining,
         currentCountry: null,
+        currentDraftSourceKind: null,
         roundIndex: 0,
         turn: order[0] ?? 'team1',
         teams: nextTeams,
@@ -279,7 +317,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'draft/useBestLineupHint': {
       if (state.phase !== 'drafting') return state
-      if (state.mode !== 'clubs' && !isNationalMode(state.mode)) return state
+      if (!supportsBestLineupHint(state.mode)) return state
       if (!state.teamOrder.includes(action.team)) return state
       if (state.hintsRemaining[action.team] <= 0) return state
       if (state.hintUsedThisRound[action.team]) return state

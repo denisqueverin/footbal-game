@@ -8,7 +8,10 @@ export type HintsBudget = 1 | 2 | 3
 
 export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
 
-export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs'
+export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'chaos'
+
+/** Тип источника раунда (для режима «Хаос» и подсказок). */
+export type DraftSourceKind = 'national' | 'club' | 'rplClub'
 
 export type ColorSchemeId = 'green' | 'red' | 'blue' | 'white'
 
@@ -48,7 +51,12 @@ export type GameState = {
 
   countriesAll: string[]
   countriesRemaining: string[]
+  /** Параллельно countriesRemaining — только режим «Хаос». */
+  chaosDraftSourceKindsRemaining: DraftSourceKind[]
+  chaosDraftSourceKindsAll: DraftSourceKind[]
   currentCountry: string | null
+  /** Режим «Хаос»: тип текущего раунда; в остальных режимах null. */
+  currentDraftSourceKind: DraftSourceKind | null
   roundIndex: number
   maxRounds: number
 

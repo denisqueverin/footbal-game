@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
 
+import { inferChaosSourceKind } from '@/entities/game/chaosDraftPool';
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
-import { isNationalMode } from '@/entities/game/gameMode';
+import { isChaosMode, isNationalDraftSource } from '@/entities/game/gameMode';
 import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/types';
 
 export interface TeamBoardProps {
@@ -86,10 +87,11 @@ export function TeamBoard(props: TeamBoardProps) {
               const pick = props.team.picksBySlotId[cell.slotId];
               const isSelected = props.selectedSlotId === cell.slotId;
               const isTaken = Boolean(pick?.playerName);
-              const flagUrl =
-                isNationalMode(props.mode)
-                  ? getCountryFlagUrlRu(pick?.country)
-                  : getClubFlagUrl(pick?.country);
+              const chaosKind =
+                isChaosMode(props.mode) ? inferChaosSourceKind(pick?.country) : null;
+              const flagUrl = isNationalDraftSource(props.mode, chaosKind)
+                ? getCountryFlagUrlRu(pick?.country)
+                : getClubFlagUrl(pick?.country);
               const sourceLabel = pick?.country ?? '';
 
               return (

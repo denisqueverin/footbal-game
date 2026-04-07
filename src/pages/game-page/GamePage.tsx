@@ -11,7 +11,12 @@ import {
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { roundTurnOrder } from '@/entities/game/turnOrder';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
-import { isNationalMode } from '@/entities/game/gameMode';
+import {
+  isChaosMode,
+  isClubsMode,
+  isNationalDraftSource,
+  supportsBestLineupHint,
+} from '@/entities/game/gameMode';
 import type { GameState, TeamId } from '@/entities/game/types';
 
 import { APP_VERSION } from '@/shared/config/version';
@@ -97,8 +102,11 @@ export function GamePage(props: GamePageProps) {
   const currentSourceFlagUrl = useMemo(() => {
     const label = state.currentCountry;
     if (!label) return null;
-    return state.mode === 'clubs' ? getClubFlagUrl(label) : getCountryFlagUrlRu(label);
-  }, [state.currentCountry, state.mode]);
+    const chaosKind = isChaosMode(state.mode) ? state.currentDraftSourceKind : null;
+    return isNationalDraftSource(state.mode, chaosKind)
+      ? getCountryFlagUrlRu(label)
+      : getClubFlagUrl(label);
+  }, [state.currentCountry, state.currentDraftSourceKind, state.mode]);
 
   useEffect(() => {
     if (state.phase !== 'drafting' || state.draftTimerPausedAt != null) {
@@ -232,6 +240,7 @@ export function GamePage(props: GamePageProps) {
         onClose={() => setBestLineupOpen(false)}
         mode={state.mode}
         currentSource={state.currentCountry}
+        currentDraftSourceKind={isChaosMode(state.mode) ? state.currentDraftSourceKind : null}
         includeBench={state.bestLineupIncludeBench}
       />
       <RoundIntroModal
@@ -241,6 +250,7 @@ export function GamePage(props: GamePageProps) {
         round={state.roundIndex}
         sourceLabel={state.currentCountry ?? ''}
         mode={state.mode}
+        draftSourceKind={isChaosMode(state.mode) ? state.currentDraftSourceKind : null}
         onClose={handleCloseRoundModal}
       />
       <ConfirmNewGameModal
@@ -250,7 +260,13 @@ export function GamePage(props: GamePageProps) {
       />
       <div style={styles.topbar}>
         <div style={styles.topbarLeft}>
-          <div style={styles.title}>{state.mode === 'clubs' ? 'Текущий клуб' : 'Текущая страна'}</div>
+          <div style={styles.title}>
+            {isChaosMode(state.mode)
+              ? 'Текущий источник'
+              : isClubsMode(state.mode)
+                ? 'Текущий клуб'
+                : 'Текущая страна'}
+          </div>
           <div style={styles.countryRow}>
             <div style={styles.country}>
               <b>{state.currentCountry ?? '—'}</b>
@@ -318,7 +334,7 @@ export function GamePage(props: GamePageProps) {
                 onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
                 disabled={activeTeam !== teamId}
                 bestLineupHint={
-                  (state.mode === 'clubs' || isNationalMode(state.mode)) &&
+                  supportsBestLineupHint(state.mode) &&
                   state.phase === 'drafting' &&
                   !isEditingLineups &&
                   Boolean(state.currentCountry)
