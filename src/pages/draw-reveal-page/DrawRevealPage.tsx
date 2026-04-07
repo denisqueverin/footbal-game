@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { pickRandomLoadingPhrases } from '@/entities/game/loadingPhrases';
 import { roundTurnOrder } from '@/entities/game/turnOrder';
@@ -11,6 +11,8 @@ import { DrawRevealTeamRow } from './ui/DrawRevealTeamRow';
 
 export interface DrawRevealPageProps {
   state: GameState;
+  /** После окончания сплеша с мячом — подставить случайные названия команд. */
+  onAssignTeamNames: () => void;
   onContinue: () => void;
   onReset: () => void;
 }
@@ -30,6 +32,13 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
   const loadingPhrases = useMemo(() => pickRandomLoadingPhrases(), []);
 
   const rafRef = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!isReady) {
+      return;
+    }
+    props.onAssignTeamNames();
+  }, [isReady, props.onAssignTeamNames]);
 
   useEffect(() => {
     const timeStart = performance.now();

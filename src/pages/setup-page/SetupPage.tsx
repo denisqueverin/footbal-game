@@ -16,7 +16,6 @@ export interface SetupPageProps {
   teams: Record<TeamId, TeamState>;
   mode: GameMode;
   onSetTeamFormation: (team: TeamId, formation: FormationId) => void;
-  onSetTeamName: (team: TeamId, name: string) => void;
   onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void;
   onSetTeamCount: (count: TeamCount) => void;
   onSetMode: (mode: GameMode) => void;
@@ -83,7 +82,6 @@ interface TeamBoxProps {
   activeFormation: FormationId;
   colorScheme: ColorSchemeId;
   isFormationDisabled: boolean;
-  onNameChange: (name: string) => void;
   onPickScheme: (scheme: ColorSchemeId) => void;
   onPickFormation: (formation: FormationId) => void;
 }
@@ -91,12 +89,7 @@ interface TeamBoxProps {
 function TeamBox(props: TeamBoxProps) {
   return (
     <div style={styles.teamBox}>
-      <input
-        value={props.teamName}
-        onChange={(event) => props.onNameChange(event.target.value)}
-        placeholder="Название команды"
-        style={styles.teamNameInput}
-      />
+      <div style={styles.teamNameDisplay}>{props.teamName}</div>
       <div style={styles.schemeRowWithGap}>
         {SETUP_SCHEME_OPTIONS.map((option) => (
           <SchemeButton
@@ -200,7 +193,6 @@ export function SetupPage(props: SetupPageProps) {
                   activeFormation={team.formation}
                   colorScheme={team.colorScheme}
                   isFormationDisabled={props.formationLocked}
-                  onNameChange={(name) => props.onSetTeamName(teamId, name)}
                   onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
                   onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
                 />
@@ -276,14 +268,14 @@ const styles: Record<string, CSSProperties> = {
     background: 'rgba(0,0,0,0.10)',
     padding: 12,
   },
-  teamNameInput: {
+  teamNameDisplay: {
     width: '100%',
     padding: '10px 12px',
     borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.24)',
-    color: 'inherit',
-    outline: 'none',
+    border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(0,0,0,0.18)',
+    fontWeight: 700,
+    letterSpacing: -0.2,
   },
   schemeRowWithGap: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 12 },
   schemeBtn: {

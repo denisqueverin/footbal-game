@@ -1,7 +1,7 @@
-import { useCallback, useReducer } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 import type { FormationId } from '@/entities/game/formations';
-import { gameReducer, initialGameState } from '@/entities/game/reducer';
+import { createInitialGameState, gameReducer } from '@/entities/game/reducer';
 import type { ColorSchemeId, GameMode, TeamCount, TeamId } from '@/entities/game/types';
 
 import { DrawRevealPage } from '@/pages/draw-reveal-page';
@@ -9,8 +9,23 @@ import { GamePage } from '@/pages/game-page';
 import { ResultPage } from '@/pages/result-page';
 import { SetupPage } from '@/pages/setup-page';
 
+import { clearGameStorage, loadPersistedGameState, saveGameState } from '@/shared/lib/gameStorage';
+
 export function App() {
-  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const skipNextPersistRef = useRef(false);
+
+  const [state, dispatch] = useReducer(gameReducer, undefined, () => {
+    return loadPersistedGameState() ?? createInitialGameState();
+  });
+
+  useEffect(() => {
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+
+    saveGameState(state);
+  }, [state]);
 
   const handleSetupSetMode = useCallback((mode: GameMode) => {
     dispatch({ type: 'setup/setMode', mode });
@@ -24,10 +39,6 @@ export function App() {
     dispatch({ type: 'setup/setTeamFormation', team, formation });
   }, []);
 
-  const handleSetupSetTeamName = useCallback((team: TeamId, name: string) => {
-    dispatch({ type: 'setup/setTeamName', team, name });
-  }, []);
-
   const handleSetupSetTeamColorScheme = useCallback((team: TeamId, scheme: ColorSchemeId) => {
     dispatch({ type: 'setup/setTeamColorScheme', team, scheme });
   }, []);
@@ -37,7 +48,13 @@ export function App() {
   }, []);
 
   const handleGameReset = useCallback(() => {
+    skipNextPersistRef.current = true;
+    clearGameStorage();
     dispatch({ type: 'game/reset' });
+  }, []);
+
+  const handleDrawRevealAssignTeamNames = useCallback(() => {
+    dispatch({ type: 'drawReveal/assignTeamNames' });
   }, []);
 
   const handleDrawRevealContinue = useCallback(() => {
@@ -48,6 +65,14 @@ export function App() {
     dispatch({ type: 'draft/confirmPick', team, slotId, playerName });
   }, []);
 
+  const handleSetDraftTimerPaused = useCallback((paused: boolean) => {
+    dispatch({ type: 'draft/setDraftTimerPaused', paused });
+  }, []);
+
+  const handleSetPickPlayerName = useCallback((team: TeamId, slotId: string, playerName: string) => {
+    dispatch({ type: 'draft/setPickPlayerName', team, slotId, playerName });
+  }, []);
+
   if (state.phase === 'setup') {
     return (
       <SetupPage
@@ -56,7 +81,6 @@ export function App() {
         teams={state.teams}
         mode={state.mode}
         onSetTeamFormation={handleSetupSetTeamFormation}
-        onSetTeamName={handleSetupSetTeamName}
         onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
         onSetMode={handleSetupSetMode}
@@ -73,6 +97,7 @@ export function App() {
     return (
       <DrawRevealPage
         state={state}
+        onAssignTeamNames={handleDrawRevealAssignTeamNames}
         onContinue={handleDrawRevealContinue}
         onReset={handleGameReset}
       />
@@ -84,6 +109,8 @@ export function App() {
       state={state}
       onConfirmPick={handleDraftConfirmPick}
       onReset={handleGameReset}
+      onSetDraftTimerPaused={handleSetDraftTimerPaused}
+      onSetPickPlayerName={handleSetPickPlayerName}
     />
   );
 }

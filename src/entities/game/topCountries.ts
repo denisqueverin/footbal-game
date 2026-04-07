@@ -62,6 +62,7 @@ const ISO2_BY_COUNTRY_RU: Record<string, string> = {
   Эквадор: 'ec',
   Сербия: 'rs',
   Турция: 'tr',
+  Россия: 'ru',
 }
 
 // Флаги берём из локальной папки public/flags, чтобы не зависеть от внешних CDN
