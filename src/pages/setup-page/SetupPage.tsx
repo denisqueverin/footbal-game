@@ -6,6 +6,7 @@ import { FORMATIONS, type FormationId } from '@/entities/game/formations';
 import type { ColorSchemeId, GameMode, HintsBudget, TeamCount, TeamId, TeamState } from '@/entities/game/types';
 
 import { FormationPreview } from '@/shared/ui/formation-preview';
+import { schemeDotColor } from '@/shared/lib/schemeAccent';
 
 import { APP_VERSION } from '@/shared/config/version';
 
@@ -91,21 +92,6 @@ function SchemeButton(props: SchemeButtonProps) {
       {props.label}
     </button>
   );
-}
-
-function schemeDotColor(schemeId: ColorSchemeId): string {
-  switch (schemeId) {
-    case 'green':
-      return 'rgba(38,145,80,0.95)';
-    case 'red':
-      return 'rgba(190,48,58,0.95)';
-    case 'blue':
-      return 'rgba(45,92,200,0.95)';
-    case 'white':
-      return 'rgba(240,240,245,0.95)';
-    default:
-      return 'rgba(255,255,255,0.9)';
-  }
 }
 
 interface TeamBoxProps {
