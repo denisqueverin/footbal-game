@@ -5,6 +5,7 @@ import { roundTurnOrder } from '@/entities/game/turnOrder';
 import type { GameState } from '@/entities/game/types';
 
 import { APP_VERSION } from '@/shared/config/version';
+import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 
 import { getPhraseRevealState } from './draw-reveal-page.utils';
 import { DrawRevealTeamRow } from './ui/DrawRevealTeamRow';
@@ -22,6 +23,7 @@ const SPLASH_MS = 10_000;
 export function DrawRevealPage(props: DrawRevealPageProps) {
   const { state } = props;
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const isReady = elapsedMs >= SPLASH_MS;
 
   const round1Order = useMemo(
@@ -68,6 +70,11 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
 
   return (
     <div className="draw-reveal">
+      <ConfirmNewGameModal
+        open={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        onConfirm={props.onReset}
+      />
       <div className="draw-reveal-stars" aria-hidden="true" />
       <div className="draw-reveal-inner">
         <div className="draw-reveal-version">v{APP_VERSION}</div>
@@ -111,7 +118,7 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
         </div>
 
         <div className="draw-reveal-footer">
-          <button type="button" className="draw-reveal-ghost" onClick={props.onReset}>
+          <button type="button" className="draw-reveal-ghost" onClick={() => setResetConfirmOpen(true)}>
             Новая игра
           </button>
         </div>

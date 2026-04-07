@@ -35,7 +35,7 @@ export const TOP_50_EURO_CLUBS = [
   'VfL Wolfsburg',
   'Werder Bremen',
   'Zenit Saint Petersburg',
-  'Benfica',
+  'Valencia',
   'Leicester City',
   'Galatasaray',
   'Fenerbahçe',

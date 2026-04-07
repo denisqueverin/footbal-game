@@ -1,7 +1,9 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import { FORMATIONS, type FormationId } from '@/entities/game/formations';
 import type { GameState, TeamId } from '@/entities/game/types';
+
+import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 
 export interface ResultPageProps {
   state: GameState;
@@ -45,13 +47,15 @@ function TeamSummary(props: TeamSummaryProps) {
 
 export function ResultPage(props: ResultPageProps) {
   const { state } = props;
-
-  const handleResetClick = () => {
-    props.onReset();
-  };
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   return (
     <div style={styles.page}>
+      <ConfirmNewGameModal
+        open={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        onConfirm={props.onReset}
+      />
       <div style={styles.card}>
         <div style={styles.h1}>Игра завершена</div>
         <div style={styles.sub}>Итоги по командам и выбранным схемам.</div>
@@ -77,7 +81,7 @@ export function ResultPage(props: ResultPageProps) {
         </div>
 
         <div style={styles.actions}>
-          <button type="button" onClick={handleResetClick} style={styles.primaryBtn}>
+          <button type="button" onClick={() => setResetConfirmOpen(true)} style={styles.primaryBtn}>
             Новая игра
           </button>
         </div>
