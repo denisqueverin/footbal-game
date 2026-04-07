@@ -1,8 +1,13 @@
 import { getCountryFlagUrlRu } from './topCountries'
+import { RPL_CLUBS } from './rplClubs'
+
+const RPL_CLUB_TO_COUNTRY_RU: Record<string, string> = Object.fromEntries(
+  RPL_CLUBS.map((name) => [name, 'Россия']),
+)
 
 /**
  * Страна (как в интерфейсе) для каждого клуба из драфта.
- * Ключ — точное имя из TOP_50_EURO_CLUBS.
+ * Ключ — точное имя из TOP_50_EURO_CLUBS или из пула режима РПЛ.
  */
 export const CLUB_TO_COUNTRY_RU: Record<string, string> = {
   Arsenal: 'Англия',
@@ -42,6 +47,7 @@ export const CLUB_TO_COUNTRY_RU: Record<string, string> = {
   'Leicester City': 'Англия',
   Galatasaray: 'Турция',
   'Fenerbahçe': 'Турция',
+  ...RPL_CLUB_TO_COUNTRY_RU,
 }
 
 export function getClubCountryRu(club: string | null | undefined): string | null {

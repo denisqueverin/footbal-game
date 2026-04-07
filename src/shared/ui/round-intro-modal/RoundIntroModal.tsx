@@ -1,13 +1,16 @@
 import type { MouseEvent } from 'react';
 
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
+import { isChaosMode, isClubsMode, isNationalDraftSource } from '@/entities/game/gameMode';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
-import type { GameMode } from '@/entities/game/types';
+import type { DraftSourceKind, GameMode } from '@/entities/game/types';
 
 export interface RoundIntroModalProps {
   round: number;
   sourceLabel: string;
   mode: GameMode;
+  /** Режим «Хаос»: тип источника раунда. */
+  draftSourceKind?: DraftSourceKind | null;
   open: boolean;
   exiting: boolean;
   onClose: () => void;
@@ -22,13 +25,17 @@ export function RoundIntroModal(props: RoundIntroModalProps) {
     return null;
   }
 
-  const sourceHeading =
-    props.mode === 'clubs' ? 'Клуб, из которого вы выбираете' : 'Страна, из которой вы выбираете';
+  const chaosKind = isChaosMode(props.mode) ? (props.draftSourceKind ?? null) : null;
 
-  const flagUrl =
-    props.mode === 'clubs'
-      ? getClubFlagUrl(props.sourceLabel)
-      : getCountryFlagUrlRu(props.sourceLabel);
+  const sourceHeading = isChaosMode(props.mode)
+    ? 'Клуб или страна, из которой вы выбираете'
+    : isClubsMode(props.mode)
+      ? 'Клуб, из которого вы выбираете'
+      : 'Страна, из которой вы выбираете';
+
+  const flagUrl = isNationalDraftSource(props.mode, chaosKind)
+    ? getCountryFlagUrlRu(props.sourceLabel)
+    : getClubFlagUrl(props.sourceLabel);
 
   return (
     <div

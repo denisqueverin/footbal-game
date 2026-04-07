@@ -8,6 +8,8 @@ export const SETUP_MODE_OPTIONS: ReadonlyArray<{ mode: GameMode; label: string }
   { mode: 'nationalTop15', label: 'Сборные ТОП-15' },
   { mode: 'nationalTop30', label: 'Сборные ТОП-30' },
   { mode: 'clubs', label: 'Клубы' },
+  { mode: 'rpl', label: 'РПЛ' },
+  { mode: 'chaos', label: 'Хаос' },
 ];
 
 /** Формат подсказки «Лучший состав»: только стартовые 11 или ещё и запасные. */

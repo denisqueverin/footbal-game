@@ -1,5 +1,12 @@
 import { assignPlaceholderTeamNames } from '@/entities/game/teamNames';
-import type { GameMode, GamePhase, GameState, HintsBudget, TeamId } from '@/entities/game/types';
+import type {
+  DraftSourceKind,
+  GameMode,
+  GamePhase,
+  GameState,
+  HintsBudget,
+  TeamId,
+} from '@/entities/game/types';
 
 import { APP_VERSION } from '@/shared/config/version';
 
@@ -22,6 +29,8 @@ function defaultHintsRemaining(budget: number): Record<TeamId, number> {
 
 function normalizeMode(mode: unknown): GameMode {
   if (mode === 'clubs') return 'clubs'
+  if (mode === 'rpl') return 'rpl'
+  if (mode === 'chaos') return 'chaos'
   if (mode === 'nationalTop15') return 'nationalTop15'
   if (mode === 'nationalTop30') return 'nationalTop30'
   if (mode === 'national') return 'nationalTop30'
@@ -36,6 +45,9 @@ function normalizeGameState(state: GameState): GameState {
     hintUsedThisRound?: Record<TeamId, boolean>;
     bestLineupIncludeBench?: boolean;
     mode?: unknown;
+    chaosDraftSourceKindsRemaining?: DraftSourceKind[];
+    chaosDraftSourceKindsAll?: DraftSourceKind[];
+    currentDraftSourceKind?: DraftSourceKind | null;
   };
 
   const budget: HintsBudget = isHintsBudget(legacy.hintsBudgetPerPlayer ?? 0)
@@ -75,6 +87,9 @@ function normalizeGameState(state: GameState): GameState {
     hintsBudgetPerPlayer: budget,
     hintsRemaining,
     hintUsedThisRound,
+    chaosDraftSourceKindsRemaining: legacy.chaosDraftSourceKindsRemaining ?? [],
+    chaosDraftSourceKindsAll: legacy.chaosDraftSourceKindsAll ?? [],
+    currentDraftSourceKind: legacy.currentDraftSourceKind ?? null,
     draftTimerStartedAt: state.draftTimerStartedAt ?? null,
     draftTimerPausedAt: state.draftTimerPausedAt ?? null,
     draftTimerPausedAccumMs: state.draftTimerPausedAccumMs ?? 0,

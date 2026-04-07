@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from 'react';
 
 import { getLineupSectionForClub } from '@/entities/game/clubBestLineups';
-import { isNationalMode } from '@/entities/game/gameMode';
+import { isChaosMode, isClubsMode, isNationalMode } from '@/entities/game/gameMode';
 import { getNationalLineupForCountry } from '@/entities/game/nationalBestLineups';
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
-import type { GameMode } from '@/entities/game/types';
+import type { DraftSourceKind, GameMode } from '@/entities/game/types';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
 
 export interface BestLineupModalProps {
@@ -13,6 +13,8 @@ export interface BestLineupModalProps {
   mode: GameMode;
   /** Текущий клуб или страна раунда (state.currentCountry). */
   currentSource: string | null;
+  /** Режим «Хаос»: тип источника раунда. */
+  currentDraftSourceKind?: DraftSourceKind | null;
   /** Показывать скамейку запасных (настройка из главного меню). */
   includeBench: boolean;
 }
@@ -20,15 +22,22 @@ export interface BestLineupModalProps {
 const RUSSIA_RU = 'Россия';
 
 export function BestLineupModal(props: BestLineupModalProps) {
-  const clubSection = useMemo(
-    () => (props.mode === 'clubs' ? getLineupSectionForClub(props.currentSource) : null),
-    [props.mode, props.currentSource],
-  );
+  const clubSection = useMemo(() => {
+    if (isChaosMode(props.mode)) {
+      const k = props.currentDraftSourceKind ?? null;
+      if (k === 'club') return getLineupSectionForClub(props.currentSource, 'clubs');
+      if (k === 'rplClub') return getLineupSectionForClub(props.currentSource, 'rpl');
+      return null;
+    }
+    return isClubsMode(props.mode) ? getLineupSectionForClub(props.currentSource, props.mode) : null;
+  }, [props.mode, props.currentSource, props.currentDraftSourceKind]);
 
-  const nationalSection = useMemo(
-    () => (isNationalMode(props.mode) ? getNationalLineupForCountry(props.currentSource) : null),
-    [props.mode, props.currentSource],
-  );
+  const nationalSection = useMemo(() => {
+    if (isChaosMode(props.mode) && props.currentDraftSourceKind === 'national') {
+      return getNationalLineupForCountry(props.currentSource);
+    }
+    return isNationalMode(props.mode) ? getNationalLineupForCountry(props.currentSource) : null;
+  }, [props.mode, props.currentSource, props.currentDraftSourceKind]);
 
   useEffect(() => {
     if (!props.open) {
@@ -58,13 +67,18 @@ export function BestLineupModal(props: BestLineupModalProps) {
     return null;
   }
 
-  const isClubs = props.mode === 'clubs';
-  const isNational = isNationalMode(props.mode);
+  const isClubRound =
+    isClubsMode(props.mode) ||
+    (isChaosMode(props.mode) &&
+      (props.currentDraftSourceKind === 'club' || props.currentDraftSourceKind === 'rplClub'));
+  const isNational =
+    isNationalMode(props.mode) ||
+    (isChaosMode(props.mode) && props.currentDraftSourceKind === 'national');
   const isRussiaRound =
     isNational && props.currentSource != null && props.currentSource.trim() === RUSSIA_RU;
 
   const clubFlagUrl =
-    isClubs && clubSection != null ? getClubFlagUrl(clubSection.club) : null;
+    isClubRound && clubSection != null ? getClubFlagUrl(clubSection.club) : null;
   const nationalFlagUrl =
     isNational && nationalSection != null ? getCountryFlagUrlRu(nationalSection.countryRu) : null;
 
@@ -75,8 +89,11 @@ export function BestLineupModal(props: BestLineupModalProps) {
         : clubSection.club
       : '';
 
-  const subHint =
-    props.mode === 'clubs'
+  const subHint = isChaosMode(props.mode)
+    ? props.includeBench
+      ? 'Подсказка по клубу или сборной текущего раунда (старт и запас)'
+      : 'Подсказка по клубу или сборной текущего раунда (только стартовый состав)'
+    : isClubsMode(props.mode)
       ? props.includeBench
         ? 'Подсказка по клубу текущего раунда (старт и запас)'
         : 'Подсказка по клубу текущего раунда (только стартовый состав)'
@@ -105,7 +122,7 @@ export function BestLineupModal(props: BestLineupModalProps) {
           <p className="best-lineup-modal-sub">{subHint}</p>
         </div>
         <div className="best-lineup-modal-scroll">
-          {isClubs && clubSection == null ? (
+          {isClubRound && clubSection == null ? (
             <p className="best-lineup-empty">Сейчас нет клуба для раунда — подсказка недоступна.</p>
           ) : null}
 
@@ -113,7 +130,7 @@ export function BestLineupModal(props: BestLineupModalProps) {
             <p className="best-lineup-empty">Сейчас нет страны для раунда — подсказка недоступна.</p>
           ) : null}
 
-          {isClubs && clubSection != null ? (
+          {isClubRound && clubSection != null ? (
             <section className="best-lineup-club best-lineup-club--single">
               <div className="best-lineup-club-head">
                 {clubFlagUrl ? (

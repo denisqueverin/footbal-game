@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
 
+import { inferChaosSourceKind } from '@/entities/game/chaosDraftPool';
 import { getClubFlagUrl } from '@/entities/game/clubCountries';
 import { formationRowsForDisplay } from '@/entities/game/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
-import { isClubsMode, isNationalMode } from '@/entities/game/gameMode';
+import { isChaosMode, isClubsMode, isNationalDraftSource, isNationalMode } from '@/entities/game/gameMode';
 import type { GameState, TeamId } from '@/entities/game/types';
 
 export interface LineupEditorProps {
@@ -31,8 +32,15 @@ export function LineupEditor(props: LineupEditorProps) {
                     const pick = team.picksBySlotId[cell.slotId];
                     const value = pick?.playerName ?? '';
                     const sourceLabel = pick?.country;
-                    const clubFlagUrl = isClubsMode(state.mode) ? getClubFlagUrl(sourceLabel) : null;
-                    const natFlagUrl = isNationalMode(state.mode) ? getCountryFlagUrlRu(sourceLabel) : null;
+                    const chaosKind = isChaosMode(state.mode) ? inferChaosSourceKind(sourceLabel) : null;
+                    const clubFlagUrl =
+                      isClubsMode(state.mode) || (isChaosMode(state.mode) && chaosKind !== 'national')
+                        ? getClubFlagUrl(sourceLabel)
+                        : null;
+                    const natFlagUrl =
+                      isNationalMode(state.mode) || (isChaosMode(state.mode) && chaosKind === 'national')
+                        ? getCountryFlagUrlRu(sourceLabel)
+                        : null;
                     /** Только слоты, где уже был ход драфта (есть клуб/страна); пустые клетки не трогаем. */
                     const hasDraftPick = Boolean(pick?.country);
                     const inputDisabled = !hasDraftPick;
@@ -61,15 +69,15 @@ export function LineupEditor(props: LineupEditorProps) {
                           />
                           {sourceLabel ? (
                             <span style={styles.sourceHint}>
-                              {isClubsMode(state.mode) ? (
-                                <>
-                                  <span>Клуб: {sourceLabel}</span>
-                                  {clubFlagUrl ? <img src={clubFlagUrl} alt="" style={styles.hintFlag} /> : null}
-                                </>
-                              ) : (
+                              {isNationalDraftSource(state.mode, chaosKind) ? (
                                 <>
                                   <span>{sourceLabel}</span>
                                   {natFlagUrl ? <img src={natFlagUrl} alt="" style={styles.hintFlag} /> : null}
+                                </>
+                              ) : (
+                                <>
+                                  <span>Клуб: {sourceLabel}</span>
+                                  {clubFlagUrl ? <img src={clubFlagUrl} alt="" style={styles.hintFlag} /> : null}
                                 </>
                               )}
                             </span>
