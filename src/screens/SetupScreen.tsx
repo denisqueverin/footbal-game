@@ -2,6 +2,7 @@ import type { FormationId } from '../game/formations'
 import { FORMATIONS } from '../game/formations'
 import { FormationPreview } from '../ui/FormationPreview'
 import type { ColorSchemeId, GameMode, TeamCount, TeamId, TeamState } from '../game/types'
+import { APP_VERSION } from '../version'
 
 type Props = {
   formationLocked: boolean
@@ -101,6 +102,8 @@ export function SetupScreen(props: Props) {
             </button>
           </div>
         </div>
+
+        <div style={styles.versionFoot}>Версия {APP_VERSION}</div>
       </div>
     </div>
   )
@@ -318,5 +321,6 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.95,
   },
   muted: { opacity: 0.75, fontSize: 13 },
+  versionFoot: { marginTop: 16, fontSize: 12, opacity: 0.55, textAlign: 'center' },
 }
 

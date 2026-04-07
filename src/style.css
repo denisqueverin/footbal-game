@@ -172,3 +172,306 @@ select {
   text-align: center;
 }
 
+/* Порядок ходов в раунде (игровой экран) */
+.game-turn-order {
+  padding: 10px 18px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(20, 36, 72, 0.45) 0%, rgba(10, 15, 24, 0.2) 100%);
+}
+
+.game-turn-order-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.72;
+  margin-bottom: 8px;
+}
+
+.game-turn-order-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.game-turn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--chip-accent, rgba(255, 255, 255, 0.14));
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 14px;
+  font-weight: 650;
+  opacity: 0.88;
+  transition:
+    box-shadow 0.2s ease,
+    opacity 0.2s ease,
+    background 0.2s ease;
+}
+
+.game-turn-chip--active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 2px var(--chip-accent),
+    0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.game-turn-chip-num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--chip-accent);
+  color: var(--chip-accent);
+}
+
+/* Заставка жеребьёвки (UCL-настроение) */
+.draw-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(ellipse 120% 80% at 50% 20%, #1a2f5c 0%, #0a0f18 45%, #05070c 100%);
+  overflow: auto;
+}
+
+.draw-reveal-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 30% 65%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 70% 30%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 88% 55%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(1px 1px at 45% 80%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 15% 90%, rgba(255, 255, 255, 0.25), transparent);
+  opacity: 0.85;
+}
+
+.draw-reveal-inner {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 100%);
+  text-align: center;
+}
+
+.draw-reveal-version {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 12px;
+  opacity: 0.45;
+}
+
+.draw-reveal-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.12) 0%, rgba(10, 15, 24, 0.4) 100%);
+  color: #e8d89a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.draw-reveal-title {
+  margin: 0 0 10px;
+  font-size: clamp(22px, 4vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: #f2f6ff;
+  text-shadow: 0 2px 24px rgba(0, 40, 120, 0.45);
+}
+
+.draw-reveal-lead {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.78;
+  max-width: 44em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.draw-reveal-stage {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.draw-reveal-ball-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 20px;
+}
+
+.draw-reveal-ball {
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.95) 0%, transparent 42%),
+    radial-gradient(circle at 72% 38%, #0f172a 0%, transparent 35%),
+    radial-gradient(circle at 38% 72%, #0f172a 0%, transparent 32%),
+    radial-gradient(circle at 82% 78%, #0f172a 0%, transparent 28%),
+    radial-gradient(circle at 50% 50%, #e2e8f0 0%, #94a3b8 45%, #1e293b 100%);
+  box-shadow:
+    0 0 0 3px rgba(212, 175, 55, 0.3),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.42),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+  animation: draw-reveal-ball-spin 2.6s linear infinite;
+}
+
+@keyframes draw-reveal-ball-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.draw-reveal-progress {
+  width: 100%;
+  max-width: 280px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.draw-reveal-progress-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1e3a5f 0%, #d4af37 50%, #6ee7ff 100%);
+}
+
+.draw-reveal-phrase-slot {
+  margin-top: 20px;
+  min-height: 52px;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.draw-reveal-phrase {
+  margin: 0;
+  padding: 0 10px;
+  font-size: 15px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #dbe8ff;
+  text-shadow: 0 0 18px rgba(100, 160, 255, 0.25);
+}
+
+.draw-reveal-result {
+  width: 100%;
+  animation: round-modal-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.draw-reveal-result-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 12px;
+}
+
+.draw-reveal-list {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  text-align: left;
+}
+
+.draw-reveal-li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  margin-bottom: 8px;
+}
+
+.draw-reveal-li-num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 2px solid;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.draw-reveal-li-name {
+  font-weight: 750;
+  font-size: 16px;
+}
+
+.draw-reveal-cta {
+  width: 100%;
+  max-width: 320px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(128, 168, 255, 0.85);
+  background: linear-gradient(180deg, rgba(68, 120, 255, 0.45) 0%, rgba(40, 80, 200, 0.35) 100%);
+  color: #f2f6ff;
+  font-weight: 750;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.draw-reveal-cta:hover {
+  filter: brightness(1.06);
+}
+
+.draw-reveal-footer {
+  margin-top: 22px;
+}
+
+.draw-reveal-ghost {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+.draw-reveal-ghost:hover {
+  opacity: 1;
+}
+

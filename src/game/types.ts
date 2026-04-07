@@ -3,7 +3,7 @@ import type { FormationId } from './formations'
 export type TeamId = 'team1' | 'team2' | 'team3' | 'team4'
 export type TeamCount = 2 | 3 | 4
 
-export type GamePhase = 'setup' | 'drafting' | 'finished'
+export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
 
 export type GameMode = 'national' | 'clubs'
 
@@ -29,6 +29,9 @@ export type GameState = {
   formationLocked: boolean
   teamOrder: TeamId[]
   mode: GameMode
+
+  /** Случайное смещение стартового хода в раунде 1 (0 .. teamOrder.length-1). */
+  draftTurnOrderBase: number
 
   countriesAll: string[]
   countriesRemaining: string[]

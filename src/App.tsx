@@ -1,6 +1,7 @@
 import { useReducer } from 'react'
 import { gameReducer, initialGameState } from './game/reducer'
 import { SetupScreen } from './screens/SetupScreen'
+import { DrawRevealScreen } from './screens/DrawRevealScreen'
 import { GameScreen } from './screens/GameScreen'
 import { ResultScreen } from './screens/ResultScreen'
 
@@ -30,6 +31,16 @@ export function App() {
 
   if (state.phase === 'finished') {
     return <ResultScreen state={state} onReset={() => dispatch({ type: 'game/reset' })} />
+  }
+
+  if (state.phase === 'drawReveal') {
+    return (
+      <DrawRevealScreen
+        state={state}
+        onContinue={() => dispatch({ type: 'drawReveal/continue' })}
+        onReset={() => dispatch({ type: 'game/reset' })}
+      />
+    )
   }
 
   return (

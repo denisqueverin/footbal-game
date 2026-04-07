@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GameState, TeamId } from '../game/types'
+import type { ColorSchemeId, GameState, TeamId } from '../game/types'
+import { roundTurnOrder } from '../game/turnOrder'
+import { APP_VERSION } from '../version'
 import { RoundIntroModal } from '../ui/RoundIntroModal'
 import { TeamBoard } from '../ui/TeamBoard'
 
@@ -45,6 +47,14 @@ export function GameScreen(props: Props) {
   const canConfirm = useMemo(() => {
     return Boolean(state.currentCountry) && Boolean(slotId) && !activeSlotTaken && playerName.trim().length > 0
   }, [activeSlotTaken, playerName, slotId, state.currentCountry])
+
+  const roundTurnSequence = useMemo(
+    () =>
+      state.roundIndex > 0
+        ? roundTurnOrder(state.teamOrder, state.draftTurnOrderBase, state.roundIndex)
+        : [],
+    [state.draftTurnOrderBase, state.roundIndex, state.teamOrder],
+  )
 
   useEffect(() => {
     setSlotId(null)
@@ -103,11 +113,34 @@ export function GameScreen(props: Props) {
         </div>
 
         <div style={styles.topbarRight}>
+          <span style={styles.versionTag}>v{APP_VERSION}</span>
           <button type="button" onClick={props.onReset} style={styles.ghostBtn}>
             Новая игра
           </button>
         </div>
       </div>
+
+      {roundTurnSequence.length > 0 ? (
+        <div className="game-turn-order" aria-label="Очерёдность ходов в этом раунде">
+          <div className="game-turn-order-label">Раунд {state.roundIndex} — очередность ходов</div>
+          <div className="game-turn-order-chips">
+            {roundTurnSequence.map((teamId, i) => {
+              const team = state.teams[teamId]
+              const active = state.turn === teamId
+              return (
+                <span
+                  key={`${state.roundIndex}-${teamId}-${i}`}
+                  className={`game-turn-chip${active ? ' game-turn-chip--active' : ''}`}
+                  style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
+                >
+                  <span className="game-turn-chip-num">{i + 1}</span>
+                  {team.name}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div style={styles.boards}>
         {state.teamOrder.map((teamId) => (
@@ -228,5 +261,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   primaryBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
   hint: { marginTop: 8, opacity: 0.75, fontSize: 13 },
+  versionTag: { fontSize: 12, opacity: 0.55, marginRight: 4 },
+}
+
+function schemeAccent(id: ColorSchemeId): string {
+  switch (id) {
+    case 'green':
+      return 'rgba(62, 185, 110, 0.95)'
+    case 'red':
+      return 'rgba(230, 72, 85, 0.95)'
+    case 'blue':
+      return 'rgba(96, 145, 255, 0.95)'
+    case 'white':
+      return 'rgba(230, 232, 240, 0.95)'
+    default:
+      return 'rgba(255, 255, 255, 0.85)'
+  }
 }
 
