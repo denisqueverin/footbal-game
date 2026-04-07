@@ -3,7 +3,6 @@
 
 export const TOP_50_EURO_CLUBS = [
   'Arsenal',
-  'Atalanta',
   'Atlético Madrid',
   'Ajax',
   'Barcelona',
@@ -12,7 +11,6 @@ export const TOP_50_EURO_CLUBS = [
   'Borussia Dortmund',
   'Chelsea',
   'CSKA Moscow',
-  'Eintracht Frankfurt',
   'Internazionale',
   'Juventus',
   'Liverpool',
@@ -34,10 +32,12 @@ export const TOP_50_EURO_CLUBS = [
   'Sevilla',
   'Spartak Moscow',
   'Tottenham Hotspur',
-  'Valencia',
-  'Villarreal',
-  'VfB Stuttgart',
   'VfL Wolfsburg',
   'Werder Bremen',
   'Zenit Saint Petersburg',
+  'Benfica',
+  'Leicester City',
+  'Galatasaray',
+  'Fenerbahçe',
 ] as const
+
