@@ -1,7 +1,7 @@
 {
   "name": "footy-draft",
   "private": true,
-  "version": "7.0.0",
+  "version": "8.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "sass": "^1.99.0",
     "typescript": "~5.9.3",
     "vite": "^8.0.0"
   },

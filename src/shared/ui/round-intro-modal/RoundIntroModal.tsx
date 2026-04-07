@@ -1,19 +1,27 @@
-import type { GameMode } from '../game/types'
+import type { MouseEvent } from 'react';
 
-type Props = {
-  round: number
-  sourceLabel: string
-  mode: GameMode
-  open: boolean
-  exiting: boolean
-  onClose: () => void
+import type { GameMode } from '@/entities/game/types';
+
+export interface RoundIntroModalProps {
+  round: number;
+  sourceLabel: string;
+  mode: GameMode;
+  open: boolean;
+  exiting: boolean;
+  onClose: () => void;
 }
 
-export function RoundIntroModal(props: Props) {
-  if (!props.open) return null
+function stopPanelPointerPropagation(event: MouseEvent<HTMLDivElement>): void {
+  event.stopPropagation();
+}
+
+export function RoundIntroModal(props: RoundIntroModalProps) {
+  if (!props.open) {
+    return null;
+  }
 
   const sourceHeading =
-    props.mode === 'clubs' ? 'Клуб, из которого вы выбираете' : 'Страна, из которой вы выбираете'
+    props.mode === 'clubs' ? 'Клуб, из которого вы выбираете' : 'Страна, из которой вы выбираете';
 
   return (
     <div
@@ -24,7 +32,7 @@ export function RoundIntroModal(props: Props) {
     >
       <div
         className={`round-modal-panel ${props.exiting ? 'round-modal-panel--out' : ''}`}
-        onClick={(e) => e.stopPropagation()}
+        onClick={stopPanelPointerPropagation}
       >
         <button
           type="button"
@@ -45,5 +53,5 @@ export function RoundIntroModal(props: Props) {
         </div>
       </div>
     </div>
-  )
+  );
 }
