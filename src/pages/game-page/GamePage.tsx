@@ -273,6 +273,7 @@ export function GamePage(props: GamePageProps) {
   const canUseRandomHint =
     !isEditingLineups &&
     state.phase === 'drafting' &&
+    state.randomPlayerHintsBudgetPerPlayer > 0 &&
     (state.mode === 'nationalTop15' ||
       state.mode === 'nationalTop30' ||
       state.mode === 'rpl' ||
@@ -652,6 +653,7 @@ export function GamePage(props: GamePageProps) {
                 }
                 bestLineupHint={
                   supportsBestLineupHint(state.mode) &&
+                  state.hintsBudgetPerPlayer > 0 &&
                   state.phase === 'drafting' &&
                   !isEditingLineups &&
                   Boolean(state.currentCountry)

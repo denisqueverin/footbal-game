@@ -23,11 +23,11 @@ export type PersistedGamePayload = {
 const TEAM_IDS: TeamId[] = ['team1', 'team2', 'team3', 'team4'];
 
 function isHintsBudget(n: number): n is HintsBudget {
-  return n === 1 || n === 2 || n === 3;
+  return n === 0 || n === 1 || n === 2 || n === 3;
 }
 
 function isRandomPlayerHintsBudget(n: number): n is RandomPlayerHintsBudget {
-  return n === 1 || n === 2 || n === 3 || n === 11;
+  return n === 0 || n === 1 || n === 2 || n === 3 || n === 11;
 }
 
 function defaultHintsRemaining(budget: number): Record<TeamId, number> {
@@ -44,8 +44,8 @@ function normalizeMode(mode: unknown): GameMode {
   if (mode === 'chaos') return 'chaos'
   if (mode === 'nationalTop15') return 'nationalTop15'
   if (mode === 'nationalTop30') return 'nationalTop30'
-  if (mode === 'national') return 'nationalTop30'
-  return 'nationalTop30'
+  if (mode === 'national') return 'nationalTop15'
+  return 'nationalTop15'
 }
 
 function normalizeGameKind(kind: unknown): GameKind {

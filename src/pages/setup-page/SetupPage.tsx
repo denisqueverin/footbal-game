@@ -23,10 +23,11 @@ import { APP_VERSION } from '@/shared/config/version';
 import {
   SETUP_BEST_LINEUP_BENCH_OPTIONS,
   SETUP_HINT_BUDGETS,
-  SETUP_MODE_OPTIONS,
+  SETUP_MODE_GROUP_DESCRIPTIONS,
   SETUP_RANDOM_PLAYER_HINT_BUDGETS,
   SETUP_SCHEME_OPTIONS,
   SETUP_TEAM_COUNTS,
+  getSetupModeGroupId,
 } from './setup-page.constants';
 import { formationLabelShort } from './setup-page.utils';
 
@@ -188,6 +189,32 @@ function TeamBox(props: TeamBoxProps) {
 
 export function SetupPage(props: SetupPageProps) {
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [hintsSettingsOpen, setHintsSettingsOpen] = useState(true);
+
+  const randomHintsSupported =
+    props.mode === 'nationalTop15' ||
+    props.mode === 'nationalTop30' ||
+    props.mode === 'rpl' ||
+    props.mode === 'clubs' ||
+    props.mode === 'chaos';
+
+  const modeGroupId = getSetupModeGroupId(props.mode);
+
+  const hintsEnabled = props.hintsBudget > 0 || props.randomPlayerHintsBudget > 0;
+
+  const handleHintsWith = () => {
+    if (!hintsEnabled) {
+      props.onSetHintsBudget(1);
+      props.onSetRandomPlayerHintsBudget(randomHintsSupported ? 1 : 0);
+    }
+    setHintsSettingsOpen(true);
+  };
+
+  const handleHintsWithout = () => {
+    props.onSetHintsBudget(0);
+    props.onSetRandomPlayerHintsBudget(0);
+    setHintsSettingsOpen(false);
+  };
 
   return (
     <>
@@ -207,69 +234,109 @@ export function SetupPage(props: SetupPageProps) {
 
         <div style={styles.section}>
           <div style={styles.labelRow}>
-            <div style={styles.label}>Режим</div>
+            <div style={styles.label}>Режим игры</div>
           </div>
           <div style={styles.modeRow}>
-            {SETUP_MODE_OPTIONS.map((option) => (
-              <button
-                key={option.mode}
-                type="button"
-                onClick={() => props.onSetMode(option.mode)}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.mode === option.mode ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.mode === option.mode}
-              >
-                {option.label}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => props.onSetMode('nationalTop15')}
+              style={{
+                ...styles.modeBtn,
+                ...(modeGroupId === 'nations' ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={modeGroupId === 'nations'}
+            >
+              Сборные
+            </button>
+            <button
+              type="button"
+              onClick={() => props.onSetMode('clubs')}
+              style={{
+                ...styles.modeBtn,
+                ...(modeGroupId === 'clubs' ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={modeGroupId === 'clubs'}
+            >
+              Клубы
+            </button>
+            <button
+              type="button"
+              onClick={() => props.onSetMode('chaos')}
+              style={{
+                ...styles.modeBtn,
+                ...(modeGroupId === 'chaos' ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={modeGroupId === 'chaos'}
+            >
+              Хаос
+            </button>
           </div>
-        </div>
+          <div style={styles.modeHelpBox}>{SETUP_MODE_GROUP_DESCRIPTIONS[modeGroupId]}</div>
 
-        {props.gameKind === 'vsCpu' ? (
-          <div style={styles.section}>
-            <div style={styles.labelRow}>
-              <div style={styles.label}>Сложность компьютера</div>
-              <div style={styles.muted}>Влияет на выбор игроков по уровню (★)</div>
+          {modeGroupId === 'nations' ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={styles.labelRow}>
+                <div style={styles.labelMuted}>Сборные</div>
+              </div>
+              <div style={styles.modeRow}>
+                <button
+                  type="button"
+                  onClick={() => props.onSetMode('nationalTop15')}
+                  style={{
+                    ...styles.modeBtn,
+                    ...(props.mode === 'nationalTop15' ? styles.modeBtnActive : null),
+                  }}
+                  aria-pressed={props.mode === 'nationalTop15'}
+                >
+                  ТОП-15
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onSetMode('nationalTop30')}
+                  style={{
+                    ...styles.modeBtn,
+                    ...(props.mode === 'nationalTop30' ? styles.modeBtnActive : null),
+                  }}
+                  aria-pressed={props.mode === 'nationalTop30'}
+                >
+                  ТОП-30
+                </button>
+              </div>
             </div>
-            <div style={styles.modeRow}>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('beginner')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'beginner' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'beginner'}
-              >
-                Начинающий
-              </button>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('normal')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'normal' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'normal'}
-              >
-                Нормальный
-              </button>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('hard')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'hard' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'hard'}
-              >
-                Хард
-              </button>
+          ) : null}
+
+          {modeGroupId === 'clubs' ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={styles.labelRow}>
+                <div style={styles.labelMuted}>Клубы</div>
+              </div>
+              <div style={styles.modeRow}>
+                <button
+                  type="button"
+                  onClick={() => props.onSetMode('clubs')}
+                  style={{
+                    ...styles.modeBtn,
+                    ...(props.mode === 'clubs' ? styles.modeBtnActive : null),
+                  }}
+                  aria-pressed={props.mode === 'clubs'}
+                >
+                  Европейские
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.onSetMode('rpl')}
+                  style={{
+                    ...styles.modeBtn,
+                    ...(props.mode === 'rpl' ? styles.modeBtnActive : null),
+                  }}
+                  aria-pressed={props.mode === 'rpl'}
+                >
+                  РПЛ
+                </button>
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
         <div style={styles.section}>
           <div style={styles.labelRow}>
@@ -322,69 +389,157 @@ export function SetupPage(props: SetupPageProps) {
           </div>
         ) : null}
 
-        <div style={styles.section}>
-          <div style={styles.hintsFormatRow}>
-            <div style={styles.hintsFormatCol}>
-              <div style={styles.labelRow}>
-                <div style={styles.label}>Подсказки «Лучший состав» на команду за игру</div>
-              </div>
-              <div style={styles.teamCountRow}>
-                {SETUP_HINT_BUDGETS.map((budget) => (
-                  <HintBudgetButton
-                    key={budget}
-                    budget={budget}
-                    isActive={props.hintsBudget === budget}
-                    onPick={() => props.onSetHintsBudget(budget)}
-                  />
-                ))}
-              </div>
-            </div>
-            <div style={styles.hintsFormatCol}>
-              <div style={styles.labelRow}>
-                <div style={styles.label}>Формат «Лучший состав» в подсказке</div>
-              </div>
-              <div style={styles.modeRow}>
-                {SETUP_BEST_LINEUP_BENCH_OPTIONS.map((option) => (
-                  <button
-                    key={String(option.includeBench)}
-                    type="button"
-                    onClick={() => props.onSetBestLineupIncludeBench(option.includeBench)}
-                    style={{
-                      ...styles.modeBtn,
-                      ...(props.bestLineupIncludeBench === option.includeBench ? styles.modeBtnActive : null),
-                    }}
-                    aria-pressed={props.bestLineupIncludeBench === option.includeBench}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {props.mode === 'nationalTop15' ||
-        props.mode === 'nationalTop30' ||
-        props.mode === 'rpl' ||
-        props.mode === 'clubs' ||
-        props.mode === 'chaos' ? (
+        {props.gameKind === 'vsCpu' ? (
           <div style={styles.section}>
             <div style={styles.labelRow}>
-              <div style={styles.label}>Подсказки «Случайный игрок» на команду за игру</div>
-              <div style={styles.muted}>Доступно для сборных/клубов и в режиме «Хаос»</div>
+              <div style={styles.label}>Сложность компьютера</div>
+              <div style={styles.muted}>Влияет на выбор игроков по уровню (★)</div>
             </div>
-            <div style={styles.teamCountRow}>
-              {SETUP_RANDOM_PLAYER_HINT_BUDGETS.map((budget) => (
-                <RandomHintBudgetButton
-                  key={budget}
-                  budget={budget}
-                  isActive={props.randomPlayerHintsBudget === budget}
-                  onPick={() => props.onSetRandomPlayerHintsBudget(budget)}
-                />
-              ))}
+            <div style={styles.modeRow}>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('beginner')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'beginner' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'beginner'}
+              >
+                Начинающий
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('normal')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'normal' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'normal'}
+              >
+                Нормальный
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('hard')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'hard' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'hard'}
+              >
+                Хард
+              </button>
             </div>
           </div>
         ) : null}
+
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Подсказки</div>
+            <div style={styles.muted}>Можно играть без подсказок или настроить их отдельно</div>
+          </div>
+          <div style={styles.modeRow}>
+            <button
+              type="button"
+              onClick={handleHintsWith}
+              style={{
+                ...styles.modeBtn,
+                ...(hintsEnabled ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={hintsEnabled}
+            >
+              С подсказками
+            </button>
+            <button
+              type="button"
+              onClick={handleHintsWithout}
+              style={{
+                ...styles.modeBtn,
+                ...(!hintsEnabled ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={!hintsEnabled}
+            >
+              Без подсказок
+            </button>
+          </div>
+
+          {hintsEnabled ? (
+            <div style={styles.hintsPanel}>
+              <button
+                type="button"
+                onClick={() => setHintsSettingsOpen((v) => !v)}
+                style={styles.hintsPanelToggle}
+                aria-expanded={hintsSettingsOpen}
+              >
+                <span style={styles.hintsPanelChevron} aria-hidden="true">
+                  {hintsSettingsOpen ? '▼' : '▶'}
+                </span>
+                Какие подсказки
+              </button>
+              {hintsSettingsOpen ? (
+                <div style={styles.hintsPanelBody}>
+                  <div style={styles.hintsFormatRow}>
+                    <div style={styles.hintsFormatCol}>
+                      <div style={styles.labelRow}>
+                        <div style={styles.label}>«Лучший состав» на команду за игру</div>
+                      </div>
+                      <div style={styles.teamCountRow}>
+                        {SETUP_HINT_BUDGETS.map((budget) => (
+                          <HintBudgetButton
+                            key={budget}
+                            budget={budget}
+                            isActive={props.hintsBudget === budget}
+                            onPick={() => props.onSetHintsBudget(budget)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div style={styles.hintsFormatCol}>
+                      <div style={styles.labelRow}>
+                        <div style={styles.label}>Формат «Лучший состав»</div>
+                      </div>
+                      <div style={styles.modeRow}>
+                        {SETUP_BEST_LINEUP_BENCH_OPTIONS.map((option) => (
+                          <button
+                            key={String(option.includeBench)}
+                            type="button"
+                            onClick={() => props.onSetBestLineupIncludeBench(option.includeBench)}
+                            style={{
+                              ...styles.modeBtn,
+                              ...(props.bestLineupIncludeBench === option.includeBench ? styles.modeBtnActive : null),
+                            }}
+                            aria-pressed={props.bestLineupIncludeBench === option.includeBench}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {randomHintsSupported ? (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={styles.labelRow}>
+                        <div style={styles.label}>«Случайный игрок» на команду за игру</div>
+                        <div style={styles.muted}>0 — не использовать эту подсказку</div>
+                      </div>
+                      <div style={styles.teamCountRow}>
+                        {SETUP_RANDOM_PLAYER_HINT_BUDGETS.map((budget) => (
+                          <RandomHintBudgetButton
+                            key={budget}
+                            budget={budget}
+                            isActive={props.randomPlayerHintsBudget === budget}
+                            onPick={() => props.onSetRandomPlayerHintsBudget(budget)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <div style={styles.section}>
           <div style={styles.labelRow}>
@@ -477,6 +632,17 @@ const styles: Record<string, CSSProperties> = {
   },
   labelRow: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' },
   label: { fontWeight: 650 },
+  labelMuted: { fontSize: 12, fontWeight: 650, opacity: 0.8 },
+  modeHelpBox: {
+    marginTop: 10,
+    padding: '12px 14px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.10)',
+    background: 'rgba(0,0,0,0.16)',
+    fontSize: 13,
+    lineHeight: 1.45,
+    opacity: 0.92,
+  },
   modeRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
   modeBtn: {
     padding: '9px 12px',
@@ -564,5 +730,37 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 650,
   },
   muted: { opacity: 0.75, fontSize: 13 },
+  hintsPanel: {
+    marginTop: 12,
+    borderRadius: 14,
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(0,0,0,0.14)',
+    overflow: 'hidden',
+  },
+  hintsPanelToggle: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 12px',
+    border: 'none',
+    borderBottom: '1px solid rgba(255,255,255,0.08)',
+    background: 'rgba(0,0,0,0.12)',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: 14,
+    textAlign: 'left',
+  },
+  hintsPanelChevron: {
+    display: 'inline-flex',
+    width: 18,
+    justifyContent: 'center',
+    opacity: 0.85,
+    fontSize: 12,
+  },
+  hintsPanelBody: {
+    padding: 14,
+  },
   versionFoot: { marginTop: 16, fontSize: 12, opacity: 0.55, textAlign: 'center' },
 };

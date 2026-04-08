@@ -183,7 +183,7 @@ export function createInitialGameState(): GameState {
     cpuDifficulty: 'normal',
     formationLocked: false,
     teamOrder: ['team1', 'team2'],
-    mode: 'nationalTop30',
+    mode: 'nationalTop15',
     draftTurnOrderBase: 0,
 
     bestLineupIncludeBench: true,
@@ -397,6 +397,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'draft/useBestLineupHint': {
       if (state.phase !== 'drafting') return state
       if (!supportsBestLineupHint(state.mode)) return state
+      if (state.hintsBudgetPerPlayer <= 0) return state
       if (!state.teamOrder.includes(action.team)) return state
       if (state.hintsRemaining[action.team] <= 0) return state
       if (state.hintUsedThisRound[action.team]) return state
@@ -455,6 +456,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'draft/useRandomPlayerHint': {
       if (state.phase !== 'drafting') return state
+      if (state.randomPlayerHintsBudgetPerPlayer <= 0) return state
       if (
         state.mode !== 'nationalTop15' &&
         state.mode !== 'nationalTop30' &&
