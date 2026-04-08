@@ -8,6 +8,8 @@ import type {
   DraftSourceKind,
   GameMode,
   GameState,
+  GameKind,
+  CpuDifficulty,
   HintsBudget,
   RandomPlayerHintsBudget,
   SlotPick,
@@ -36,13 +38,22 @@ export type GameAction =
   | { type: 'drawReveal/assignTeamNames' }
   | { type: 'drawReveal/continue' }
   | { type: 'setup/setMode'; mode: GameMode }
+  | { type: 'setup/setGameKind'; gameKind: GameKind }
+  | { type: 'setup/setCpuDifficulty'; difficulty: CpuDifficulty }
   | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
   | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
   | { type: 'setup/setHintsBudget'; budget: HintsBudget }
   | { type: 'setup/setRandomPlayerHintsBudget'; budget: RandomPlayerHintsBudget }
   | { type: 'setup/setBestLineupIncludeBench'; includeBench: boolean }
-  | { type: 'draft/confirmPick'; team: TeamId; slotId: string; playerName: string }
+  | {
+      type: 'draft/confirmPick'
+      team: TeamId
+      slotId: string
+      playerName: string
+      playerStars?: 1 | 2 | 3 | 4 | 5 | null
+      pickedBy?: 'human' | 'cpu' | null
+    }
   | { type: 'draft/setDraftTimerPaused'; paused: boolean }
   | { type: 'draft/setPickPlayerName'; team: TeamId; slotId: string; playerName: string }
   | { type: 'draft/useBestLineupHint'; team: TeamId }
@@ -71,6 +82,8 @@ function slotPickForFormationSlot(team: TeamState, slotId: string): SlotPick | n
           label: cell.label,
           playerName: null,
           country: null,
+          playerStars: null,
+          pickedBy: null,
         }
       }
     }
@@ -104,6 +117,8 @@ function makeEmptyTeam(
         label: cell.label,
         playerName: null,
         country: null,
+        playerStars: null,
+        pickedBy: null,
       }
     }
   }
@@ -164,9 +179,11 @@ function drawNextCountry(state: GameState): GameState {
 export function createInitialGameState(): GameState {
   const base: GameState = {
     phase: 'setup',
+    gameKind: 'multi',
+    cpuDifficulty: 'normal',
     formationLocked: false,
     teamOrder: ['team1', 'team2'],
-    mode: 'nationalTop30',
+    mode: 'nationalTop15',
     draftTurnOrderBase: 0,
 
     bestLineupIncludeBench: true,
@@ -212,8 +229,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase !== 'setup') return state
       return { ...state, mode: action.mode }
     }
+    case 'setup/setGameKind': {
+      if (state.phase !== 'setup') return state
+      // В режиме vs CPU всегда 2 команды (человек + компьютер).
+      if (action.gameKind === 'vsCpu') {
+        const order: TeamId[] = ['team1', 'team2']
+        return { ...state, gameKind: 'vsCpu', teamOrder: order, turn: order[0] }
+      }
+      return { ...state, gameKind: 'multi' }
+    }
+    case 'setup/setCpuDifficulty': {
+      if (state.phase !== 'setup') return state
+      return { ...state, cpuDifficulty: action.difficulty }
+    }
     case 'setup/setTeamCount': {
       if (state.phase !== 'setup') return state
+      // В режиме vs CPU количество команд фиксировано (2).
+      if (state.gameKind === 'vsCpu') return state
       const nextOrder = teamOrderForCount(action.count)
       return { ...state, teamOrder: nextOrder, turn: nextOrder[0] ?? 'team1' }
     }
@@ -258,6 +290,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return assignRandomTeamNames(state)
     }
     case 'setup/start': {
+      const cpuTeamId: TeamId = 'team2'
+      const shouldUseCpu = state.gameKind === 'vsCpu'
+
       const chaosPicks =
         state.mode === 'chaos' ? pickRandomUnique(buildChaosDraftPool(), state.maxRounds) : null
       const items =
@@ -278,14 +313,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
 
       const n = order.length
-      const draftTurnOrderBase = n > 0 ? Math.floor(Math.random() * n) : 0
+      // В режиме vs CPU компьютер всегда ходит вторым в раунде 1:
+      // roundTurnOrder(..., roundIndex=1) при base=0 даёт порядок [team1, team2].
+      const draftTurnOrderBase = shouldUseCpu ? 0 : n > 0 ? Math.floor(Math.random() * n) : 0
       const hintBudget = state.hintsBudgetPerPlayer
       const randomPlayerHintBudget = state.randomPlayerHintsBudgetPerPlayer
 
       const nextTeams: GameState['teams'] = { ...state.teams }
       for (const teamId of order) {
         const prev = state.teams[teamId]
-        nextTeams[teamId] = makeEmptyTeam(teamId, prev.formation, prev.name, prev.colorScheme)
+        // Компьютер выбирает схему случайно перед жеребьёвкой.
+        const nextFormation =
+          shouldUseCpu && teamId === cpuTeamId
+            ? (Object.keys(FORMATIONS)[Math.floor(Math.random() * Object.keys(FORMATIONS).length)] as FormationId)
+            : prev.formation
+        // Имя команды назначается после сплеша жеребьёвки (drawReveal/assignTeamNames),
+        // поэтому здесь оставляем плейсхолдеры.
+        nextTeams[teamId] = makeEmptyTeam(teamId, nextFormation, prev.name, prev.colorScheme)
       }
       return {
         ...state,
@@ -353,6 +397,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'draft/useBestLineupHint': {
       if (state.phase !== 'drafting') return state
       if (!supportsBestLineupHint(state.mode)) return state
+      if (state.hintsBudgetPerPlayer <= 0) return state
       if (!state.teamOrder.includes(action.team)) return state
       if (state.hintsRemaining[action.team] <= 0) return state
       if (state.hintUsedThisRound[action.team]) return state
@@ -411,6 +456,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'draft/useRandomPlayerHint': {
       if (state.phase !== 'drafting') return state
+      if (state.randomPlayerHintsBudgetPerPlayer <= 0) return state
       if (
         state.mode !== 'nationalTop15' &&
         state.mode !== 'nationalTop30' &&
@@ -487,6 +533,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...existing,
             playerName: picked.playerName,
             country: state.currentCountry,
+            playerStars: picked.stars,
+            pickedBy: 'human',
           },
         },
       }
@@ -551,6 +599,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...existing,
             playerName,
             country: state.currentCountry,
+            playerStars: action.playerStars ?? null,
+            pickedBy: action.pickedBy ?? 'human',
           },
         },
       }

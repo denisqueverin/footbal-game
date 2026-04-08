@@ -4,6 +4,8 @@ import type { FormationId } from '@/entities/game/core/formations';
 import { createInitialGameState, gameReducer } from '@/entities/game/core/reducer';
 import type {
   ColorSchemeId,
+  CpuDifficulty,
+  GameKind,
   GameMode,
   HintsBudget,
   RandomPlayerHintsBudget,
@@ -36,6 +38,14 @@ export function App() {
 
   const handleSetupSetMode = useCallback((mode: GameMode) => {
     dispatch({ type: 'setup/setMode', mode });
+  }, []);
+
+  const handleSetupSetGameKind = useCallback((gameKind: GameKind) => {
+    dispatch({ type: 'setup/setGameKind', gameKind });
+  }, []);
+
+  const handleSetupSetCpuDifficulty = useCallback((difficulty: CpuDifficulty) => {
+    dispatch({ type: 'setup/setCpuDifficulty', difficulty });
   }, []);
 
   const handleSetupSetTeamCount = useCallback((count: TeamCount) => {
@@ -80,9 +90,18 @@ export function App() {
     dispatch({ type: 'drawReveal/continue' });
   }, []);
 
-  const handleDraftConfirmPick = useCallback((team: TeamId, slotId: string, playerName: string) => {
-    dispatch({ type: 'draft/confirmPick', team, slotId, playerName });
-  }, []);
+  const handleDraftConfirmPick = useCallback(
+    (
+      team: TeamId,
+      slotId: string,
+      playerName: string,
+      playerStars?: 1 | 2 | 3 | 4 | 5 | null,
+      pickedBy?: 'human' | 'cpu' | null,
+    ) => {
+      dispatch({ type: 'draft/confirmPick', team, slotId, playerName, playerStars, pickedBy });
+    },
+    [],
+  );
 
   const handleSetDraftTimerPaused = useCallback((paused: boolean) => {
     dispatch({ type: 'draft/setDraftTimerPaused', paused });
@@ -111,10 +130,14 @@ export function App() {
         teamOrder={state.teamOrder}
         teams={state.teams}
         mode={state.mode}
+        gameKind={state.gameKind}
+        cpuDifficulty={state.cpuDifficulty}
         onSetTeamFormation={handleSetupSetTeamFormation}
         onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
         onSetMode={handleSetupSetMode}
+        onSetGameKind={handleSetupSetGameKind}
+        onSetCpuDifficulty={handleSetupSetCpuDifficulty}
         hintsBudget={state.hintsBudgetPerPlayer}
         onSetHintsBudget={handleSetupSetHintsBudget}
         randomPlayerHintsBudget={state.randomPlayerHintsBudgetPerPlayer}

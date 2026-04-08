@@ -3,13 +3,18 @@ import type { FormationId } from './formations'
 export type TeamId = 'team1' | 'team2' | 'team3' | 'team4'
 export type TeamCount = 2 | 3 | 4
 
-/** Сколько подсказок «Лучший состав» у каждой команды за всю игру (выбор в меню). */
-export type HintsBudget = 1 | 2 | 3
+/** Сколько подсказок «Лучший состав» у каждой команды за всю игру (выбор в меню). 0 — подсказки выключены. */
+export type HintsBudget = 0 | 1 | 2 | 3
 
-/** Сколько подсказок «Случайный игрок» у каждой команды за всю игру (Сборные ТОП-15 и РПЛ). */
-export type RandomPlayerHintsBudget = 1 | 2 | 3 | 11
+/** Сколько подсказок «Случайный игрок» у каждой команды за всю игру. 0 — подсказки выключены. */
+export type RandomPlayerHintsBudget = 0 | 1 | 2 | 3 | 11
 
 export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
+
+/** Формат партии: обычная (несколько людей) или против компьютера (1 игрок). */
+export type GameKind = 'multi' | 'vsCpu'
+
+export type CpuDifficulty = 'beginner' | 'normal' | 'hard'
 
 export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'chaos'
 
@@ -23,6 +28,10 @@ export type SlotPick = {
   label: string
   playerName: string | null
   country: string | null
+  /** Уровень игрока (звёзды 1–5). Не показываем в UI, но храним в состоянии. */
+  playerStars: 1 | 2 | 3 | 4 | 5 | null
+  /** Кто поставил игрока. В UI показываем звёзды только для cpu. */
+  pickedBy: 'human' | 'cpu' | null
 }
 
 export type TeamState = {
@@ -35,6 +44,8 @@ export type TeamState = {
 
 export type GameState = {
   phase: GamePhase
+  gameKind: GameKind
+  cpuDifficulty: CpuDifficulty
   formationLocked: boolean
   teamOrder: TeamId[]
   mode: GameMode
@@ -42,7 +53,7 @@ export type GameState = {
   /** Показывать в подсказке «Лучший состав» скамейку запасных или только стартовых 11. */
   bestLineupIncludeBench: boolean
 
-  /** Лимит подсказок «Лучший состав» на команду за игру (1–3). */
+  /** Лимит подсказок «Лучший состав» на команду за игру (0–3). */
   hintsBudgetPerPlayer: HintsBudget
   /** Сколько подсказок осталось у каждой команды. */
   hintsRemaining: Record<TeamId, number>

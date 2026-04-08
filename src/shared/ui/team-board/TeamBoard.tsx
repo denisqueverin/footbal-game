@@ -14,6 +14,8 @@ export interface TeamBoardProps {
   disabled: boolean;
   selectedSlotId: string | null;
   onSelectSlot?: (slotId: string) => void;
+  /** Временный лоадер в слоте (например, когда компьютер "думает"). */
+  pendingPick?: { slotId: string } | null;
   /** Подсказка «Лучший состав» (клубы / сборные). */
   bestLineupHint?: {
     remaining: number;
@@ -87,6 +89,7 @@ export function TeamBoard(props: TeamBoardProps) {
               const pick = props.team.picksBySlotId[cell.slotId];
               const isSelected = props.selectedSlotId === cell.slotId;
               const isTaken = Boolean(pick?.playerName);
+              const isPending = props.pendingPick?.slotId === cell.slotId && !isTaken;
               const chaosKind =
                 isChaosMode(props.mode) ? inferChaosSourceKind(pick?.country) : null;
               const flagUrl = isNationalDraftSource(props.mode, chaosKind)
@@ -98,7 +101,7 @@ export function TeamBoard(props: TeamBoardProps) {
                 <button
                   key={cell.slotId}
                   type="button"
-                  disabled={props.disabled || isTaken}
+                  disabled={props.disabled || isTaken || isPending}
                   onClick={() => props.onSelectSlot?.(cell.slotId)}
                   style={{
                     ...styles.slot,
@@ -113,7 +116,23 @@ export function TeamBoard(props: TeamBoardProps) {
                   }
                 >
                   <div style={styles.slotLabel}>{cell.label}</div>
-                  <div style={styles.slotName}>{pick?.playerName ?? '—'}</div>
+                  <div style={styles.slotName}>
+                    {isPending ? (
+                      <span style={styles.pendingWrap}>
+                        <span style={styles.spinner} aria-hidden="true" />
+                        Думает…
+                      </span>
+                    ) : (
+                      <span style={styles.nameWrap}>
+                        <span>{pick?.playerName ?? '—'}</span>
+                        {pick?.pickedBy === 'cpu' && pick?.playerStars != null ? (
+                          <span style={styles.cpuStars} title={`Уровень: ${pick.playerStars}★`}>
+                            {pick.playerStars}★
+                          </span>
+                        ) : null}
+                      </span>
+                    )}
+                  </div>
                   <div style={styles.slotMeta}>
                     {sourceLabel ? <span style={styles.slotMetaText}>{sourceLabel}</span> : null}
                     {flagUrl ? (
@@ -225,6 +244,23 @@ const styles: Record<string, CSSProperties> = {
   slotSelected: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
   slotLabel: { fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   slotName: { fontWeight: 750, fontSize: 14, lineHeight: 1.15 },
+  nameWrap: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  cpuStars: {
+    fontSize: 12,
+    fontWeight: 850,
+    padding: '2px 6px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.22)',
+    opacity: 0.95,
+    whiteSpace: 'nowrap',
+  },
   slotMeta: {
     fontSize: 12,
     opacity: 0.8,
@@ -243,5 +279,22 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 2,
     border: '1px solid rgba(0,0,0,0.4)',
     backgroundColor: '#000',
+  },
+  pendingWrap: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    fontWeight: 750,
+    opacity: 0.95,
+  },
+  spinner: {
+    width: 14,
+    height: 14,
+    borderRadius: 999,
+    border: '2px solid rgba(255,255,255,0.25)',
+    borderTopColor: 'rgba(255,255,255,0.9)',
+    animation: 'fc-spin 0.8s linear infinite',
+    display: 'inline-block',
   },
 };

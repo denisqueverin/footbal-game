@@ -17,7 +17,30 @@ import {
   isNationalDraftSource,
   supportsBestLineupHint,
 } from '@/entities/game/modes/gameMode';
-import type { GameState, TeamId } from '@/entities/game/core/types';
+import type { DraftSourceKind, GameMode, GameState, TeamId } from '@/entities/game/core/types';
+import {
+  existingNameKeys,
+  countAvailableEuroClubPlayers,
+  countAvailableRplPlayers,
+  countAvailableTop15Players,
+  countAvailableTop30Players,
+  pickBestAnyEuroClubOutfieldPlayer,
+  pickBestAnyRplOutfieldPlayer,
+  pickBestAnyTop15OutfieldPlayer,
+  pickBestAnyTop30OutfieldPlayer,
+  pickBestEuroClubPlayer,
+  pickBestRplPlayer,
+  pickBestTop15Player,
+  pickBestTop30Player,
+  pickRandomAnyEuroClubOutfieldPlayer,
+  pickRandomAnyRplOutfieldPlayer,
+  pickRandomAnyTop15OutfieldPlayer,
+  pickRandomAnyTop30OutfieldPlayer,
+  pickRandomEuroClubPlayer,
+  pickRandomRplPlayer,
+  pickRandomTop15Player,
+  pickRandomTop30Player,
+} from '@/entities/game/hints/randomPlayerHint';
 
 import { APP_VERSION } from '@/shared/config/version';
 import { schemeAccent } from '@/shared/lib/schemeAccent';
@@ -33,7 +56,13 @@ import { LineupEditor } from './ui/LineupEditor';
 
 export interface GamePageProps {
   state: GameState;
-  onConfirmPick: (team: TeamId, slotId: string, playerName: string) => void;
+  onConfirmPick: (
+    team: TeamId,
+    slotId: string,
+    playerName: string,
+    playerStars?: 1 | 2 | 3 | 4 | 5 | null,
+    pickedBy?: 'human' | 'cpu' | null,
+  ) => void;
   onReset: () => void;
   onSetDraftTimerPaused: (paused: boolean) => void;
   onSetPickPlayerName: (team: TeamId, slotId: string, playerName: string) => void;
@@ -45,10 +74,14 @@ export interface GamePageProps {
 export function GamePage(props: GamePageProps) {
   const { state } = props;
   const activeTeam = state.turn;
+  const cpuTurnLockRef = useRef<string | null>(null);
 
   const [now, setNow] = useState(() => Date.now());
   const [playerName, setPlayerName] = useState('');
   const [slotId, setSlotId] = useState<string | null>(null);
+  const [cpuPending, setCpuPending] = useState<null | { slotId: string; pickedName: string; pickedStars: 1 | 2 | 3 | 4 | 5 | null }>(
+    null,
+  );
   const [roundModalOpen, setRoundModalOpen] = useState(false);
   const [roundModalExiting, setRoundModalExiting] = useState(false);
   /** Увеличивается при «Завершить редактирование» — заново показываем интро текущего раунда. */
@@ -240,6 +273,7 @@ export function GamePage(props: GamePageProps) {
   const canUseRandomHint =
     !isEditingLineups &&
     state.phase === 'drafting' &&
+    state.randomPlayerHintsBudgetPerPlayer > 0 &&
     (state.mode === 'nationalTop15' ||
       state.mode === 'nationalTop30' ||
       state.mode === 'rpl' ||
@@ -254,6 +288,254 @@ export function GamePage(props: GamePageProps) {
     if (!slotId) return;
     props.onUseRandomPlayerHint(activeTeam, slotId);
   }, [activeTeam, props, slotId]);
+
+  // Ход компьютера: выбираем слот -> 3с лоадер -> подсветка -> подтверждение -> передача хода.
+  useEffect(() => {
+    const cpuTeamId: TeamId = 'team2';
+    const isEditingLineups = state.draftTimerPausedAt != null;
+    const isCpuTurn =
+      state.phase === 'drafting' &&
+      state.gameKind === 'vsCpu' &&
+      !isEditingLineups &&
+      state.turn === cpuTeamId &&
+      Boolean(state.currentCountry);
+
+    if (!isCpuTurn) return;
+
+    const lockKey = `${state.roundIndex}:${state.currentCountry ?? ''}:${state.turn}:${Object.values(
+      state.teams[cpuTeamId].picksBySlotId,
+    )
+      .filter((p) => p.playerName)
+      .map((p) => p.slotId)
+      .join(',')}`;
+    if (cpuTurnLockRef.current === lockKey) return;
+    cpuTurnLockRef.current = lockKey;
+
+    const source = state.currentCountry;
+    if (!source) return;
+
+    const team = state.teams[cpuTeamId];
+    const emptySlots = Object.values(team.picksBySlotId).filter((p) => !p.playerName);
+    if (emptySlots.length === 0) return;
+
+    const usedKeys = existingNameKeys(state);
+
+    const chaosKind: DraftSourceKind | null =
+      state.mode === 'chaos' ? (state.currentDraftSourceKind ?? null) : null;
+    const effectiveMode: GameMode =
+      state.mode === 'chaos'
+        ? chaosKind === 'rplClub'
+          ? 'rpl'
+          : chaosKind === 'club'
+            ? 'clubs'
+            : 'nationalTop30'
+        : state.mode;
+
+    const pickByPosition = (
+      position: string,
+      minStars: 1 | 2 | 3 | 4 | 5 | null,
+    ): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
+      const picked =
+        effectiveMode === 'nationalTop15'
+          ? pickRandomTop15Player({ country: source, position, usedNameKeys: usedKeys })
+          : effectiveMode === 'nationalTop30'
+            ? pickRandomTop30Player({ country: source, position, usedNameKeys: usedKeys })
+            : effectiveMode === 'rpl'
+              ? pickRandomRplPlayer({ club: source, position, usedNameKeys: usedKeys })
+              : pickRandomEuroClubPlayer({ club: source, position, usedNameKeys: usedKeys });
+      if (!picked) return null;
+      if (minStars != null && picked.stars < minStars) return null;
+      return { name: picked.playerName, stars: picked.stars };
+    };
+
+    const difficulty = state.cpuDifficulty;
+
+    const pickRandomAny = (): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
+      const any =
+        effectiveMode === 'nationalTop15'
+          ? pickRandomAnyTop15OutfieldPlayer({ country: source, usedNameKeys: usedKeys })
+          : effectiveMode === 'nationalTop30'
+            ? pickRandomAnyTop30OutfieldPlayer({ country: source, usedNameKeys: usedKeys })
+            : effectiveMode === 'rpl'
+              ? pickRandomAnyRplOutfieldPlayer({ club: source, usedNameKeys: usedKeys })
+              : pickRandomAnyEuroClubOutfieldPlayer({ club: source, usedNameKeys: usedKeys });
+      return any ? { name: any.playerName, stars: any.stars } : null;
+    };
+
+    const pickBestByPosition = (
+      position: string,
+      usedNameKeys: Set<string>,
+    ): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
+      const picked =
+        effectiveMode === 'nationalTop15'
+          ? pickBestTop15Player({ country: source, position, usedNameKeys })
+          : effectiveMode === 'nationalTop30'
+            ? pickBestTop30Player({ country: source, position, usedNameKeys })
+            : effectiveMode === 'rpl'
+              ? pickBestRplPlayer({ club: source, position, usedNameKeys })
+              : pickBestEuroClubPlayer({ club: source, position, usedNameKeys });
+      return picked ? { name: picked.playerName, stars: picked.stars } : null;
+    };
+
+    const countByPosition = (position: string, usedNameKeys: Set<string>): number => {
+      return effectiveMode === 'nationalTop15'
+        ? countAvailableTop15Players({ country: source, position, usedNameKeys })
+        : effectiveMode === 'nationalTop30'
+          ? countAvailableTop30Players({ country: source, position, usedNameKeys })
+          : effectiveMode === 'rpl'
+            ? countAvailableRplPlayers({ club: source, position, usedNameKeys })
+            : countAvailableEuroClubPlayers({ club: source, position, usedNameKeys });
+    };
+
+    const pickBestAnyOutfield = (
+      usedNameKeys: Set<string>,
+    ): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
+      const picked =
+        effectiveMode === 'nationalTop15'
+          ? pickBestAnyTop15OutfieldPlayer({ country: source, usedNameKeys })
+          : effectiveMode === 'nationalTop30'
+            ? pickBestAnyTop30OutfieldPlayer({ country: source, usedNameKeys })
+            : effectiveMode === 'rpl'
+              ? pickBestAnyRplOutfieldPlayer({ club: source, usedNameKeys })
+              : pickBestAnyEuroClubOutfieldPlayer({ club: source, usedNameKeys });
+      return picked ? { name: picked.playerName, stars: picked.stars } : null;
+    };
+
+    const positionAliases = (label: string): string[] => {
+      switch (label) {
+        case 'RAM':
+          return ['RM', 'RW', 'CAM', 'CM'];
+        case 'LAM':
+          return ['LM', 'LW', 'CAM', 'CM'];
+        case 'RWB':
+          return ['RB', 'RM'];
+        case 'LWB':
+          return ['LB', 'LM'];
+        default:
+          return [label];
+      }
+    };
+
+    let picked: { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null = null;
+    let chosen = emptySlots[Math.floor(Math.random() * emptySlots.length)]!;
+
+    if (difficulty === 'beginner') {
+      // Всегда рандом: может быть непрофильный игрок в непрофильной позиции.
+      const slotIsGk = chosen.label === 'GK';
+      picked = slotIsGk ? pickByPosition('GK', null) : pickRandomAny();
+    } else if (difficulty === 'hard') {
+      // Усиленный hard:
+      // 1) для каждого свободного слота ищем лучший профильный вариант по звёздам
+      // 2) при равенстве звёзд выбираем позицию с меньшим числом доступных кандидатов (дефицитность)
+      // 3) если профильных нет — берём strongest outfield
+      const moves = emptySlots
+        .map((slot) => {
+          const aliases = positionAliases(slot.label);
+          const variants = aliases
+            .map((pos) => {
+              const best = pickBestByPosition(pos, usedKeys);
+              if (!best) return null;
+              const count = countByPosition(pos, usedKeys);
+              return { pos, best, count };
+            })
+            .filter((v) => v != null);
+          if (variants.length === 0) return null;
+
+          // берём лучший вариант для слота: max stars, при равенстве — min count (дефицит)
+          variants.sort((a, b) => {
+            if (a!.best.stars !== b!.best.stars) return b!.best.stars - a!.best.stars;
+            return a!.count - b!.count;
+          });
+          const topStars = variants[0]!.best.stars;
+          const top = variants.filter((v) => v!.best.stars === topStars);
+          const topMinCount = Math.min(...top.map((v) => v!.count));
+          const finalists = top.filter((v) => v!.count === topMinCount);
+          const chosenVariant = finalists[Math.floor(Math.random() * finalists.length)]!;
+
+          return { slot, pick: chosenVariant.best, scarcity: chosenVariant.count };
+        })
+        .filter((x) => x != null);
+
+      if (moves.length > 0) {
+        // выбираем лучший ход среди слотов: max stars, при равенстве — min scarcity
+        moves.sort((a, b) => {
+          if (a!.pick.stars !== b!.pick.stars) return b!.pick.stars - a!.pick.stars;
+          return a!.scarcity - b!.scarcity;
+        });
+        const bestStars = moves[0]!.pick.stars;
+        const bestByStars = moves.filter((m) => m!.pick.stars === bestStars);
+        const minScarcity = Math.min(...bestByStars.map((m) => m!.scarcity));
+        const finalists = bestByStars.filter((m) => m!.scarcity === minScarcity);
+        const chosenMove = finalists[Math.floor(Math.random() * finalists.length)]!;
+        chosen = chosenMove.slot;
+        picked = chosenMove.pick;
+      } else {
+        // Fallback: если профильного нет ни на один свободный слот — берём самого сильного полевого игрока.
+        const outfieldSlots = emptySlots.filter((s) => s.label !== 'GK');
+        const bestOutfield = pickBestAnyOutfield(usedKeys);
+        if (bestOutfield && outfieldSlots.length > 0) {
+          chosen = outfieldSlots[Math.floor(Math.random() * outfieldSlots.length)]!;
+          picked = bestOutfield;
+        } else {
+          // Если остался только GK (или нет полевого игрока) — пытаемся подобрать GK.
+          const gkSlot = emptySlots.find((s) => s.label === 'GK');
+          const bestGk = pickBestByPosition('GK', usedKeys);
+          if (gkSlot && bestGk) {
+            chosen = gkSlot;
+            picked = bestGk;
+          } else {
+            picked = pickRandomAny();
+          }
+        }
+      }
+    } else {
+      const slotIsGk = chosen.label === 'GK';
+      // normal: стараемся 4★+, иначе любое на позицию (3★ и ниже).
+      picked = pickByPosition(chosen.label, 4) ?? pickByPosition(chosen.label, null);
+      if (!picked) {
+        picked = slotIsGk ? pickByPosition('GK', null) : pickRandomAny();
+      }
+    }
+
+    // Последний шанс: если из-за usedNameKeys не нашли никого, разрешаем дубль, но берём реального игрока.
+    if (!picked) {
+      const noFilter = new Set<string>();
+      const outfieldSlots = emptySlots.filter((s) => s.label !== 'GK');
+      const bestOutfieldNoFilter = pickBestAnyOutfield(noFilter);
+      if (bestOutfieldNoFilter && outfieldSlots.length > 0) {
+        chosen = outfieldSlots[Math.floor(Math.random() * outfieldSlots.length)]!;
+        picked = bestOutfieldNoFilter;
+      } else {
+        const gkSlot = emptySlots.find((s) => s.label === 'GK');
+        const bestGkNoFilter = pickBestByPosition('GK', noFilter);
+        if (gkSlot && bestGkNoFilter) {
+          chosen = gkSlot;
+          picked = bestGkNoFilter;
+        }
+      }
+    }
+
+    const pickedName = picked?.name ?? `CPU Player ${Math.floor(Math.random() * 10_000)}`;
+    const pickedStars = picked?.stars ?? null;
+
+    // 1) Показать лоадер в выбранном слоте.
+    setCpuPending({ slotId: chosen.slotId, pickedName, pickedStars });
+
+    // 2) Через 3 секунды — подсветить слот.
+    const t1 = window.setTimeout(() => {
+      setCpuPending(null);
+      setSlotId(chosen.slotId);
+
+      // 3) Небольшая пауза, чтобы подсветка была заметна, затем подтвердить выбор и передать ход.
+      const t2 = window.setTimeout(() => {
+        props.onConfirmPick(cpuTeamId, chosen.slotId, pickedName, pickedStars, 'cpu');
+      }, 250);
+
+      return () => window.clearTimeout(t2);
+    }, 3000);
+
+    return () => window.clearTimeout(t1);
+  }, [props, state]);
 
   return (
     <div style={styles.page}>
@@ -361,8 +643,17 @@ export function GamePage(props: GamePageProps) {
                 selectedSlotId={activeTeam === teamId ? slotId : null}
                 onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
                 disabled={activeTeam !== teamId}
+                pendingPick={
+                  state.gameKind === 'vsCpu' &&
+                  state.turn === 'team2' &&
+                  teamId === 'team2' &&
+                  cpuPending != null
+                    ? { slotId: cpuPending.slotId }
+                    : null
+                }
                 bestLineupHint={
                   supportsBestLineupHint(state.mode) &&
+                  state.hintsBudgetPerPlayer > 0 &&
                   state.phase === 'drafting' &&
                   !isEditingLineups &&
                   Boolean(state.currentCountry)
