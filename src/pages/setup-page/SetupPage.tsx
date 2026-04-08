@@ -5,6 +5,8 @@ import { RulesModal } from '@/shared/ui/rules-modal';
 import { FORMATIONS, type FormationId } from '@/entities/game/core/formations';
 import type {
   ColorSchemeId,
+  GameKind,
+  CpuDifficulty,
   GameMode,
   HintsBudget,
   RandomPlayerHintsBudget,
@@ -33,10 +35,14 @@ export interface SetupPageProps {
   teamOrder: TeamId[];
   teams: Record<TeamId, TeamState>;
   mode: GameMode;
+  gameKind: GameKind;
+  cpuDifficulty: CpuDifficulty;
   onSetTeamFormation: (team: TeamId, formation: FormationId) => void;
   onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void;
   onSetTeamCount: (count: TeamCount) => void;
   onSetMode: (mode: GameMode) => void;
+  onSetGameKind: (gameKind: GameKind) => void;
+  onSetCpuDifficulty: (difficulty: CpuDifficulty) => void;
   hintsBudget: HintsBudget;
   onSetHintsBudget: (budget: HintsBudget) => void;
   randomPlayerHintsBudget: RandomPlayerHintsBudget;
@@ -50,6 +56,7 @@ interface CountButtonProps {
   count: TeamCount;
   isActive: boolean;
   onPick: () => void;
+  disabled?: boolean;
 }
 
 interface HintBudgetButtonProps {
@@ -95,6 +102,7 @@ function CountButton(props: CountButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
+      disabled={props.disabled}
       style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
       aria-pressed={props.isActive}
     >
@@ -129,6 +137,7 @@ interface TeamBoxProps {
   activeFormation: FormationId;
   colorScheme: ColorSchemeId;
   isFormationDisabled: boolean;
+  hideFormationPicker?: boolean;
   onPickScheme: (scheme: ColorSchemeId) => void;
   onPickFormation: (formation: FormationId) => void;
 }
@@ -148,27 +157,31 @@ function TeamBox(props: TeamBoxProps) {
           />
         ))}
       </div>
-      <div style={styles.formationGrid}>
-        {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
-          <button
-            key={formationId}
-            type="button"
-            onClick={() => props.onPickFormation(formationId)}
-            disabled={props.isFormationDisabled}
-            style={{
-              ...styles.formationCard,
-              ...(props.activeFormation === formationId ? styles.formationCardActive : null),
-              ...(props.isFormationDisabled ? styles.formationCardDisabled : null),
-            }}
-            title={formationLabelShort(formationId)}
-          >
-            <div style={styles.formationCardTop}>
-              <div style={styles.formationName}>{formationLabelShort(formationId)}</div>
-            </div>
-            <FormationPreview formation={formationId} />
-          </button>
-        ))}
-      </div>
+      {props.hideFormationPicker ? (
+        <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
+      ) : (
+        <div style={styles.formationGrid}>
+          {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
+            <button
+              key={formationId}
+              type="button"
+              onClick={() => props.onPickFormation(formationId)}
+              disabled={props.isFormationDisabled}
+              style={{
+                ...styles.formationCard,
+                ...(props.activeFormation === formationId ? styles.formationCardActive : null),
+                ...(props.isFormationDisabled ? styles.formationCardDisabled : null),
+              }}
+              title={formationLabelShort(formationId)}
+            >
+              <div style={styles.formationCardTop}>
+                <div style={styles.formationName}>{formationLabelShort(formationId)}</div>
+              </div>
+              <FormationPreview formation={formationId} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -214,21 +227,100 @@ export function SetupPage(props: SetupPageProps) {
           </div>
         </div>
 
+        {props.gameKind === 'vsCpu' ? (
+          <div style={styles.section}>
+            <div style={styles.labelRow}>
+              <div style={styles.label}>Сложность компьютера</div>
+              <div style={styles.muted}>Влияет на выбор игроков по уровню (★)</div>
+            </div>
+            <div style={styles.modeRow}>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('beginner')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'beginner' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'beginner'}
+              >
+                Начинающий
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('normal')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'normal' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'normal'}
+              >
+                Нормальный
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('hard')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'hard' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'hard'}
+              >
+                Хард
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div style={styles.section}>
           <div style={styles.labelRow}>
-            <div style={styles.label}>Игроков</div>
+            <div style={styles.label}>Режим партии</div>
+            <div style={styles.muted}>
+              «Против компьютера» фиксирует 2 команды, схема компьютера выбирается случайно
+            </div>
           </div>
-          <div style={styles.teamCountRow}>
-            {SETUP_TEAM_COUNTS.map((count) => (
-              <CountButton
-                key={count}
-                count={count}
-                isActive={props.teamOrder.length === count}
-                onPick={() => props.onSetTeamCount(count)}
-              />
-            ))}
+          <div style={styles.modeRow}>
+            <button
+              type="button"
+              onClick={() => props.onSetGameKind('vsCpu')}
+              style={{
+                ...styles.modeBtn,
+                ...(props.gameKind === 'vsCpu' ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={props.gameKind === 'vsCpu'}
+            >
+              Против компьютера (1 игрок)
+            </button>
+            <button
+              type="button"
+              onClick={() => props.onSetGameKind('multi')}
+              style={{
+                ...styles.modeBtn,
+                ...(props.gameKind === 'multi' ? styles.modeBtnActive : null),
+              }}
+              aria-pressed={props.gameKind === 'multi'}
+            >
+              Несколько игроков
+            </button>
           </div>
         </div>
+
+        {props.gameKind === 'multi' ? (
+          <div style={styles.section}>
+            <div style={styles.labelRow}>
+              <div style={styles.label}>Количество игроков</div>
+            </div>
+            <div style={styles.teamCountRow}>
+              {SETUP_TEAM_COUNTS.map((count) => (
+                <CountButton
+                  key={count}
+                  count={count}
+                  isActive={props.teamOrder.length === count}
+                  onPick={() => props.onSetTeamCount(count)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div style={styles.section}>
           <div style={styles.hintsFormatRow}>
@@ -302,14 +394,17 @@ export function SetupPage(props: SetupPageProps) {
           <div style={styles.teamFormations}>
             {props.teamOrder.map((teamId) => {
               const team = props.teams[teamId];
+              const isCpuTeam = props.gameKind === 'vsCpu' && teamId === 'team2';
+              const displayTeamName = isCpuTeam ? 'Нейро команда 2' : team.name;
 
               return (
                 <TeamBox
                   key={teamId}
-                  teamName={team.name}
+                  teamName={displayTeamName}
                   activeFormation={team.formation}
                   colorScheme={team.colorScheme}
-                  isFormationDisabled={props.formationLocked}
+                  isFormationDisabled={props.formationLocked || isCpuTeam}
+                  hideFormationPicker={isCpuTeam}
                   onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
                   onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
                 />

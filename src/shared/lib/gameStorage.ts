@@ -2,6 +2,8 @@ import { assignPlaceholderTeamNames } from '@/entities/game/data/teamNames';
 import type {
   DraftSourceKind,
   GameMode,
+  GameKind,
+  CpuDifficulty,
   GamePhase,
   GameState,
   HintsBudget,
@@ -46,6 +48,18 @@ function normalizeMode(mode: unknown): GameMode {
   return 'nationalTop30'
 }
 
+function normalizeGameKind(kind: unknown): GameKind {
+  if (kind === 'vsCpu') return 'vsCpu'
+  if (kind === 'multi') return 'multi'
+  return 'multi'
+}
+
+function normalizeCpuDifficulty(value: unknown): CpuDifficulty {
+  if (value === 'beginner') return 'beginner'
+  if (value === 'hard') return 'hard'
+  return 'normal'
+}
+
 function normalizeGameState(state: GameState): GameState {
   const legacy = state as GameState & {
     bestLineupHintUsed?: Record<TeamId, boolean>;
@@ -60,6 +74,8 @@ function normalizeGameState(state: GameState): GameState {
     chaosDraftSourceKindsRemaining?: DraftSourceKind[];
     chaosDraftSourceKindsAll?: DraftSourceKind[];
     currentDraftSourceKind?: DraftSourceKind | null;
+    gameKind?: unknown;
+    cpuDifficulty?: unknown;
   };
 
   const budget: HintsBudget = isHintsBudget(legacy.hintsBudgetPerPlayer ?? 0)
@@ -91,6 +107,8 @@ function normalizeGameState(state: GameState): GameState {
     typeof legacy.bestLineupIncludeBench === 'boolean' ? legacy.bestLineupIncludeBench : true
 
   const mode = normalizeMode(legacy.mode ?? state.mode)
+  const gameKind = normalizeGameKind(legacy.gameKind ?? state.gameKind)
+  const cpuDifficulty = normalizeCpuDifficulty(legacy.cpuDifficulty ?? state.cpuDifficulty)
 
   const randomBudget: RandomPlayerHintsBudget = isRandomPlayerHintsBudget(
     legacy.randomPlayerHintsBudgetPerPlayer ?? 0,
@@ -104,6 +122,8 @@ function normalizeGameState(state: GameState): GameState {
   return {
     ...state,
     mode,
+    gameKind,
+    cpuDifficulty,
     bestLineupIncludeBench,
     hintsBudgetPerPlayer: budget,
     hintsRemaining,
@@ -114,6 +134,22 @@ function normalizeGameState(state: GameState): GameState {
     chaosDraftSourceKindsRemaining: legacy.chaosDraftSourceKindsRemaining ?? [],
     chaosDraftSourceKindsAll: legacy.chaosDraftSourceKindsAll ?? [],
     currentDraftSourceKind: legacy.currentDraftSourceKind ?? null,
+    // Старые сохранения могли не иметь playerStars в слотах.
+    teams: Object.fromEntries(
+      (Object.entries(state.teams) as Array<[TeamId, GameState['teams'][TeamId]]>).map(([teamId, team]) => {
+        const nextPicks = Object.fromEntries(
+          Object.entries(team.picksBySlotId).map(([slotId, pick]) => [
+            slotId,
+            {
+              ...pick,
+              playerStars: (pick as { playerStars?: unknown }).playerStars ?? null,
+              pickedBy: (pick as { pickedBy?: unknown }).pickedBy ?? null,
+            },
+          ]),
+        ) as GameState['teams'][TeamId]['picksBySlotId']
+        return [teamId, { ...team, picksBySlotId: nextPicks }]
+      }),
+    ) as GameState['teams'],
     draftTimerStartedAt: state.draftTimerStartedAt ?? null,
     draftTimerPausedAt: state.draftTimerPausedAt ?? null,
     draftTimerPausedAccumMs: state.draftTimerPausedAccumMs ?? 0,

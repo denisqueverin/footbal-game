@@ -11,6 +11,11 @@ export type RandomPlayerHintsBudget = 1 | 2 | 3 | 11
 
 export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
 
+/** Формат партии: обычная (несколько людей) или против компьютера (1 игрок). */
+export type GameKind = 'multi' | 'vsCpu'
+
+export type CpuDifficulty = 'beginner' | 'normal' | 'hard'
+
 export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'chaos'
 
 /** Тип источника раунда (для режима «Хаос» и подсказок). */
@@ -23,6 +28,10 @@ export type SlotPick = {
   label: string
   playerName: string | null
   country: string | null
+  /** Уровень игрока (звёзды 1–5). Не показываем в UI, но храним в состоянии. */
+  playerStars: 1 | 2 | 3 | 4 | 5 | null
+  /** Кто поставил игрока. В UI показываем звёзды только для cpu. */
+  pickedBy: 'human' | 'cpu' | null
 }
 
 export type TeamState = {
@@ -35,6 +44,8 @@ export type TeamState = {
 
 export type GameState = {
   phase: GamePhase
+  gameKind: GameKind
+  cpuDifficulty: CpuDifficulty
   formationLocked: boolean
   teamOrder: TeamId[]
   mode: GameMode
