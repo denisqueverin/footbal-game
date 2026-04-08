@@ -21,7 +21,7 @@ import {
 } from '@/entities/game/modes/gameMode';
 import type { DraftSourceKind, GameMode, GameState, TeamId } from '@/entities/game/core/types';
 import {
-  existingNameKeys,
+  existingPickedPlayerNames,
   countAvailableEuroClubPlayers,
   countAvailableRplPlayers,
   countAvailableTop15Players,
@@ -322,7 +322,7 @@ export function GamePage(props: GamePageProps) {
     const emptySlots = Object.values(team.picksBySlotId).filter((p) => !p.playerName);
     if (emptySlots.length === 0) return;
 
-    const usedKeys = existingNameKeys(state);
+    const usedNames = existingPickedPlayerNames(state);
 
     const chaosKind: DraftSourceKind | null =
       state.mode === 'chaos' ? (state.currentDraftSourceKind ?? null) : null;
@@ -341,12 +341,12 @@ export function GamePage(props: GamePageProps) {
     ): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
       const picked =
         effectiveMode === 'nationalTop15'
-          ? pickRandomTop15Player({ country: source, position, usedNameKeys: usedKeys })
+          ? pickRandomTop15Player({ country: source, position, usedPlayerNames: usedNames })
           : effectiveMode === 'nationalTop30'
-            ? pickRandomTop30Player({ country: source, position, usedNameKeys: usedKeys })
+            ? pickRandomTop30Player({ country: source, position, usedPlayerNames: usedNames })
             : effectiveMode === 'rpl'
-              ? pickRandomRplPlayer({ club: source, position, usedNameKeys: usedKeys })
-              : pickRandomEuroClubPlayer({ club: source, position, usedNameKeys: usedKeys });
+              ? pickRandomRplPlayer({ club: source, position, usedPlayerNames: usedNames })
+              : pickRandomEuroClubPlayer({ club: source, position, usedPlayerNames: usedNames });
       if (!picked) return null;
       if (minStars != null && picked.stars < minStars) return null;
       return { name: picked.playerName, stars: picked.stars };
@@ -357,51 +357,51 @@ export function GamePage(props: GamePageProps) {
     const pickRandomAny = (): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
       const any =
         effectiveMode === 'nationalTop15'
-          ? pickRandomAnyTop15OutfieldPlayer({ country: source, usedNameKeys: usedKeys })
+          ? pickRandomAnyTop15OutfieldPlayer({ country: source, usedPlayerNames: usedNames })
           : effectiveMode === 'nationalTop30'
-            ? pickRandomAnyTop30OutfieldPlayer({ country: source, usedNameKeys: usedKeys })
+            ? pickRandomAnyTop30OutfieldPlayer({ country: source, usedPlayerNames: usedNames })
             : effectiveMode === 'rpl'
-              ? pickRandomAnyRplOutfieldPlayer({ club: source, usedNameKeys: usedKeys })
-              : pickRandomAnyEuroClubOutfieldPlayer({ club: source, usedNameKeys: usedKeys });
+              ? pickRandomAnyRplOutfieldPlayer({ club: source, usedPlayerNames: usedNames })
+              : pickRandomAnyEuroClubOutfieldPlayer({ club: source, usedPlayerNames: usedNames });
       return any ? { name: any.playerName, stars: any.stars } : null;
     };
 
     const pickBestByPosition = (
       position: string,
-      usedNameKeys: Set<string>,
+      usedPlayerNames: readonly string[],
     ): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
       const picked =
         effectiveMode === 'nationalTop15'
-          ? pickBestTop15Player({ country: source, position, usedNameKeys })
+          ? pickBestTop15Player({ country: source, position, usedPlayerNames })
           : effectiveMode === 'nationalTop30'
-            ? pickBestTop30Player({ country: source, position, usedNameKeys })
+            ? pickBestTop30Player({ country: source, position, usedPlayerNames })
             : effectiveMode === 'rpl'
-              ? pickBestRplPlayer({ club: source, position, usedNameKeys })
-              : pickBestEuroClubPlayer({ club: source, position, usedNameKeys });
+              ? pickBestRplPlayer({ club: source, position, usedPlayerNames })
+              : pickBestEuroClubPlayer({ club: source, position, usedPlayerNames });
       return picked ? { name: picked.playerName, stars: picked.stars } : null;
     };
 
-    const countByPosition = (position: string, usedNameKeys: Set<string>): number => {
+    const countByPosition = (position: string, usedPlayerNames: readonly string[]): number => {
       return effectiveMode === 'nationalTop15'
-        ? countAvailableTop15Players({ country: source, position, usedNameKeys })
+        ? countAvailableTop15Players({ country: source, position, usedPlayerNames })
         : effectiveMode === 'nationalTop30'
-          ? countAvailableTop30Players({ country: source, position, usedNameKeys })
+          ? countAvailableTop30Players({ country: source, position, usedPlayerNames })
           : effectiveMode === 'rpl'
-            ? countAvailableRplPlayers({ club: source, position, usedNameKeys })
-            : countAvailableEuroClubPlayers({ club: source, position, usedNameKeys });
+            ? countAvailableRplPlayers({ club: source, position, usedPlayerNames })
+            : countAvailableEuroClubPlayers({ club: source, position, usedPlayerNames });
     };
 
     const pickBestAnyOutfield = (
-      usedNameKeys: Set<string>,
+      usedPlayerNames: readonly string[],
     ): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
       const picked =
         effectiveMode === 'nationalTop15'
-          ? pickBestAnyTop15OutfieldPlayer({ country: source, usedNameKeys })
+          ? pickBestAnyTop15OutfieldPlayer({ country: source, usedPlayerNames })
           : effectiveMode === 'nationalTop30'
-            ? pickBestAnyTop30OutfieldPlayer({ country: source, usedNameKeys })
+            ? pickBestAnyTop30OutfieldPlayer({ country: source, usedPlayerNames })
             : effectiveMode === 'rpl'
-              ? pickBestAnyRplOutfieldPlayer({ club: source, usedNameKeys })
-              : pickBestAnyEuroClubOutfieldPlayer({ club: source, usedNameKeys });
+              ? pickBestAnyRplOutfieldPlayer({ club: source, usedPlayerNames })
+              : pickBestAnyEuroClubOutfieldPlayer({ club: source, usedPlayerNames });
       return picked ? { name: picked.playerName, stars: picked.stars } : null;
     };
 
@@ -437,9 +437,9 @@ export function GamePage(props: GamePageProps) {
           const aliases = positionAliases(slot.label);
           const variants = aliases
             .map((pos) => {
-              const best = pickBestByPosition(pos, usedKeys);
+              const best = pickBestByPosition(pos, usedNames);
               if (!best) return null;
-              const count = countByPosition(pos, usedKeys);
+              const count = countByPosition(pos, usedNames);
               return { pos, best, count };
             })
             .filter((v) => v != null);
@@ -476,14 +476,14 @@ export function GamePage(props: GamePageProps) {
       } else {
         // Fallback: если профильного нет ни на один свободный слот — берём самого сильного полевого игрока.
         const outfieldSlots = emptySlots.filter((s) => s.label !== 'GK');
-        const bestOutfield = pickBestAnyOutfield(usedKeys);
+        const bestOutfield = pickBestAnyOutfield(usedNames);
         if (bestOutfield && outfieldSlots.length > 0) {
           chosen = outfieldSlots[Math.floor(Math.random() * outfieldSlots.length)]!;
           picked = bestOutfield;
         } else {
           // Если остался только GK (или нет полевого игрока) — пытаемся подобрать GK.
           const gkSlot = emptySlots.find((s) => s.label === 'GK');
-          const bestGk = pickBestByPosition('GK', usedKeys);
+          const bestGk = pickBestByPosition('GK', usedNames);
           if (gkSlot && bestGk) {
             chosen = gkSlot;
             picked = bestGk;
@@ -501,9 +501,9 @@ export function GamePage(props: GamePageProps) {
       }
     }
 
-    // Последний шанс: если из-за usedNameKeys не нашли никого, разрешаем дубль, но берём реального игрока.
+    // Последний шанс: если из-за фильтра имён не нашли никого, разрешаем дубль, но берём реального игрока.
     if (!picked) {
-      const noFilter = new Set<string>();
+      const noFilter: string[] = [];
       const outfieldSlots = emptySlots.filter((s) => s.label !== 'GK');
       const bestOutfieldNoFilter = pickBestAnyOutfield(noFilter);
       if (bestOutfieldNoFilter && outfieldSlots.length > 0) {

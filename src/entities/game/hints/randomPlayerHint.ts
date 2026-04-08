@@ -14,6 +14,94 @@ function normalizeSpaces(s: string): string {
   return s.trim().replace(/\s+/g, ' ')
 }
 
+/** Нижний регистр, схлопывание пробелов, дефисы как разделители слов. */
+function normalizeComparableName(s: string): string {
+  return normalizeSpaces(s)
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+function tokenizePlayerName(s: string): string[] {
+  return normalizeComparableName(s)
+    .split(' ')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+}
+
+function sortedTokenKey(tokens: string[]): string {
+  return [...tokens].sort().join('\u0001')
+}
+
+/**
+ * Считаем, что это один и тот же человек (для антидублей ИИ/подсказок):
+ * — полное совпадение строки;
+ * — те же слова в другом порядке (Имя Фамилия / Фамилия Имя);
+ * — мононим совпадает с первым или последним словом полного имени либо с любым токеном (длина ≥ 2);
+ * — у двух многословных имён совпадают первое и последнее слово (в том или ином порядке).
+ */
+export function namesLikelySamePerson(aRaw: string, bRaw: string): boolean {
+  const na = normalizeComparableName(aRaw)
+  const nb = normalizeComparableName(bRaw)
+  if (!na || !nb) return false
+  if (na === nb) return true
+
+  const a = tokenizePlayerName(aRaw)
+  const b = tokenizePlayerName(bRaw)
+  if (a.length === 0 || b.length === 0) return false
+
+  if (a.length === b.length && sortedTokenKey(a) === sortedTokenKey(b)) {
+    return true
+  }
+
+  if (a.length === 1 && b.length >= 2) {
+    return mononymMatchesMultiTokenName(a[0]!, b)
+  }
+  if (b.length === 1 && a.length >= 2) {
+    return mononymMatchesMultiTokenName(b[0]!, a)
+  }
+
+  if (a.length >= 2 && b.length >= 2) {
+    const af = a[0]!
+    const al = a[a.length - 1]!
+    const bf = b[0]!
+    const bl = b[b.length - 1]!
+    if (af === bf && al === bl) return true
+    if (af === bl && al === bf) return true
+  }
+
+  return false
+}
+
+function mononymMatchesMultiTokenName(single: string, multi: string[]): boolean {
+  if (single.length < 2) return false
+  const first = multi[0]!
+  const last = multi[multi.length - 1]!
+  if (single === first || single === last) return true
+  return multi.some((t) => t.length >= 2 && t === single)
+}
+
+export function isDraftedPlayerNameTaken(
+  candidateName: string,
+  usedPlayerNames: readonly string[],
+): boolean {
+  const c = normalizeSpaces(candidateName.trim())
+  if (!c.length) return false
+  return usedPlayerNames.some((u) => namesLikelySamePerson(c, u))
+}
+
+export function existingPickedPlayerNames(state: GameState): string[] {
+  const names: string[] = []
+  for (const teamId of state.teamOrder) {
+    const team = state.teams[teamId]
+    for (const pick of Object.values(team.picksBySlotId)) {
+      const n = pick.playerName?.trim()
+      if (n) names.push(normalizeSpaces(n))
+    }
+  }
+  return names
+}
+
 type BestPick = { playerName: string; stars: PlayerStars }
 
 function normalizeCandidate(
@@ -28,7 +116,7 @@ function normalizeCandidate(
 
 function countAvailableFromCandidates(args: {
   candidates: readonly (string | RandomPlayerCandidate)[]
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   starsForName?: (name: string) => PlayerStars | null
 }): number {
   return args.candidates
@@ -38,15 +126,12 @@ function countAvailableFromCandidates(args: {
     })
     .map((c) => ({ ...c, playerName: normalizeSpaces(c.playerName) }))
     .filter((c) => c.playerName.length > 0)
-    .filter((c) => {
-      const k = nameMatchKey(c.playerName)
-      return Boolean(k) && !args.usedNameKeys.has(k)
-    }).length
+    .filter((c) => !isDraftedPlayerNameTaken(c.playerName, args.usedPlayerNames)).length
 }
 
 function pickBestFromCandidates(args: {
   candidates: readonly (string | RandomPlayerCandidate)[]
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
   starsForName?: (name: string) => PlayerStars | null
 }): BestPick | null {
@@ -57,10 +142,7 @@ function pickBestFromCandidates(args: {
     })
     .map((c) => ({ ...c, playerName: normalizeSpaces(c.playerName) }))
     .filter((c) => c.playerName.length > 0)
-    .filter((c) => {
-      const k = nameMatchKey(c.playerName)
-      return Boolean(k) && !args.usedNameKeys.has(k)
-    })
+    .filter((c) => !isDraftedPlayerNameTaken(c.playerName, args.usedPlayerNames))
 
   if (pool.length === 0) return null
 
@@ -70,39 +152,10 @@ function pickBestFromCandidates(args: {
   return { playerName: item.playerName, stars: item.stars }
 }
 
-/**
- * Правило совпадения имён для исключения дублей между командами.
- * - 1 слово: это слово
- * - 2 слова: второе слово
- * - 3+ слов: второе + третье
- * Без учёта регистра.
- */
-export function nameMatchKey(fullName: string): string {
-  const cleaned = normalizeSpaces(fullName).toLowerCase()
-  if (!cleaned) return ''
-  const parts = cleaned.split(' ')
-  if (parts.length === 1) return parts[0]!
-  if (parts.length === 2) return parts[1]!
-  return `${parts[1]!} ${parts[2]!}`
-}
-
-export function existingNameKeys(state: GameState): Set<string> {
-  const keys = new Set<string>()
-  for (const teamId of state.teamOrder) {
-    const team = state.teams[teamId]
-    for (const pick of Object.values(team.picksBySlotId)) {
-      if (!pick.playerName) continue
-      const k = nameMatchKey(pick.playerName)
-      if (k) keys.add(k)
-    }
-  }
-  return keys
-}
-
 export function pickRandomTop15Player(args: {
   country: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = NATIONAL_TOP15_RANDOM_PLAYERS[args.country]
@@ -118,9 +171,7 @@ export function pickRandomTop15Player(args: {
     remaining = rest
     const normalized: RandomPlayerCandidate =
       typeof item === 'string' ? { playerName: item, stars: 3 } : item
-    const k = nameMatchKey(normalized.playerName)
-    if (!k) continue
-    if (args.usedNameKeys.has(k)) {
+    if (isDraftedPlayerNameTaken(normalized.playerName, args.usedPlayerNames)) {
       continue
     }
     return { playerName: normalized.playerName, stars: normalized.stars }
@@ -132,7 +183,7 @@ export function pickRandomTop15Player(args: {
 export function pickRandomTop30Player(args: {
   country: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = NATIONAL_TOP30_RANDOM_PLAYERS[args.country]
@@ -147,9 +198,7 @@ export function pickRandomTop30Player(args: {
     remaining = rest
     const normalized: RandomPlayerCandidate =
       typeof item === 'string' ? { playerName: item, stars: 3 } : item
-    const k = nameMatchKey(normalized.playerName)
-    if (!k) continue
-    if (args.usedNameKeys.has(k)) continue
+    if (isDraftedPlayerNameTaken(normalized.playerName, args.usedPlayerNames)) continue
     return { playerName: normalized.playerName, stars: normalized.stars }
   }
 
@@ -159,7 +208,7 @@ export function pickRandomTop30Player(args: {
 export function pickRandomRplPlayer(args: {
   club: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = RPL_RANDOM_PLAYERS[args.club]
@@ -176,9 +225,7 @@ export function pickRandomRplPlayer(args: {
       typeof item === 'string'
         ? { playerName: item, stars: RPL_PLAYER_STARS[args.club]?.[item] ?? 3 }
         : (item as RandomPlayerCandidate)
-    const k = nameMatchKey(normalized.playerName)
-    if (!k) continue
-    if (args.usedNameKeys.has(k)) continue
+    if (isDraftedPlayerNameTaken(normalized.playerName, args.usedPlayerNames)) continue
     return { playerName: normalized.playerName, stars: normalized.stars }
   }
 
@@ -188,7 +235,7 @@ export function pickRandomRplPlayer(args: {
 export function pickRandomEuroClubPlayer(args: {
   club: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = EURO_CLUBS_RANDOM_PLAYERS[args.club]
@@ -205,9 +252,7 @@ export function pickRandomEuroClubPlayer(args: {
       typeof item === 'string'
         ? { playerName: item, stars: EURO_CLUBS_PLAYER_STARS[args.club]?.[item] ?? 3 }
         : (item as RandomPlayerCandidate)
-    const k = nameMatchKey(normalized.playerName)
-    if (!k) continue
-    if (args.usedNameKeys.has(k)) continue
+    if (isDraftedPlayerNameTaken(normalized.playerName, args.usedPlayerNames)) continue
     return { playerName: normalized.playerName, stars: normalized.stars }
   }
 
@@ -216,7 +261,7 @@ export function pickRandomEuroClubPlayer(args: {
 
 function pickRandomAnyOutfieldFromPool(args: {
   pool: Partial<Record<Top15RandomPosition, readonly (string | RandomPlayerCandidate)[]>>
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   // собираем всех полевых (кроме GK)
@@ -233,9 +278,7 @@ function pickRandomAnyOutfieldFromPool(args: {
   while (remaining.length > 0) {
     const { item, rest } = drawRandom(remaining, args.rng)
     remaining = rest
-    const k = nameMatchKey(item.playerName)
-    if (!k) continue
-    if (args.usedNameKeys.has(k)) continue
+    if (isDraftedPlayerNameTaken(item.playerName, args.usedPlayerNames)) continue
     return { playerName: item.playerName, stars: item.stars }
   }
 
@@ -244,32 +287,32 @@ function pickRandomAnyOutfieldFromPool(args: {
 
 export function pickRandomAnyTop15OutfieldPlayer(args: {
   country: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = NATIONAL_TOP15_RANDOM_PLAYERS[args.country]
   if (!pool) return null
-  return pickRandomAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  return pickRandomAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
 }
 
 export function pickRandomAnyTop30OutfieldPlayer(args: {
   country: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = NATIONAL_TOP30_RANDOM_PLAYERS[args.country]
   if (!pool) return null
-  return pickRandomAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  return pickRandomAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
 }
 
 export function pickRandomAnyRplOutfieldPlayer(args: {
   club: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = RPL_RANDOM_PLAYERS[args.club]
   if (!pool) return null
-  const picked = pickRandomAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  const picked = pickRandomAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
   if (!picked) return null
   const stars = RPL_PLAYER_STARS[args.club]?.[picked.playerName] ?? picked.stars
   return { playerName: picked.playerName, stars }
@@ -277,12 +320,12 @@ export function pickRandomAnyRplOutfieldPlayer(args: {
 
 export function pickRandomAnyEuroClubOutfieldPlayer(args: {
   club: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): { playerName: string; stars: PlayerStars } | null {
   const pool = EURO_CLUBS_RANDOM_PLAYERS[args.club]
   if (!pool) return null
-  const picked = pickRandomAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  const picked = pickRandomAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
   if (!picked) return null
   const stars = EURO_CLUBS_PLAYER_STARS[args.club]?.[picked.playerName] ?? picked.stars
   return { playerName: picked.playerName, stars }
@@ -291,7 +334,7 @@ export function pickRandomAnyEuroClubOutfieldPlayer(args: {
 export function pickBestTop15Player(args: {
   country: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = NATIONAL_TOP15_RANDOM_PLAYERS[args.country]
@@ -299,26 +342,26 @@ export function pickBestTop15Player(args: {
   const pos = args.position as Top15RandomPosition
   const candidates = pool[pos]
   if (!candidates || candidates.length === 0) return null
-  return pickBestFromCandidates({ candidates, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  return pickBestFromCandidates({ candidates, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
 }
 
 export function countAvailableTop15Players(args: {
   country: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = NATIONAL_TOP15_RANDOM_PLAYERS[args.country]
   if (!pool) return 0
   const pos = args.position as Top15RandomPosition
   const candidates = pool[pos]
   if (!candidates || candidates.length === 0) return 0
-  return countAvailableFromCandidates({ candidates, usedNameKeys: args.usedNameKeys })
+  return countAvailableFromCandidates({ candidates, usedPlayerNames: args.usedPlayerNames })
 }
 
 export function pickBestTop30Player(args: {
   country: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = NATIONAL_TOP30_RANDOM_PLAYERS[args.country]
@@ -326,26 +369,26 @@ export function pickBestTop30Player(args: {
   const pos = args.position as Top15RandomPosition
   const candidates = pool[pos]
   if (!candidates || candidates.length === 0) return null
-  return pickBestFromCandidates({ candidates, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  return pickBestFromCandidates({ candidates, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
 }
 
 export function countAvailableTop30Players(args: {
   country: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = NATIONAL_TOP30_RANDOM_PLAYERS[args.country]
   if (!pool) return 0
   const pos = args.position as Top15RandomPosition
   const candidates = pool[pos]
   if (!candidates || candidates.length === 0) return 0
-  return countAvailableFromCandidates({ candidates, usedNameKeys: args.usedNameKeys })
+  return countAvailableFromCandidates({ candidates, usedPlayerNames: args.usedPlayerNames })
 }
 
 export function pickBestRplPlayer(args: {
   club: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = RPL_RANDOM_PLAYERS[args.club]
@@ -355,7 +398,7 @@ export function pickBestRplPlayer(args: {
   if (!candidates || candidates.length === 0) return null
   return pickBestFromCandidates({
     candidates,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     rng: args.rng,
     starsForName: (name) => RPL_PLAYER_STARS[args.club]?.[name] ?? null,
   })
@@ -364,7 +407,7 @@ export function pickBestRplPlayer(args: {
 export function countAvailableRplPlayers(args: {
   club: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = RPL_RANDOM_PLAYERS[args.club]
   if (!pool) return 0
@@ -373,7 +416,7 @@ export function countAvailableRplPlayers(args: {
   if (!candidates || candidates.length === 0) return 0
   return countAvailableFromCandidates({
     candidates,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     starsForName: (name) => RPL_PLAYER_STARS[args.club]?.[name] ?? null,
   })
 }
@@ -381,7 +424,7 @@ export function countAvailableRplPlayers(args: {
 export function pickBestEuroClubPlayer(args: {
   club: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = EURO_CLUBS_RANDOM_PLAYERS[args.club]
@@ -391,7 +434,7 @@ export function pickBestEuroClubPlayer(args: {
   if (!candidates || candidates.length === 0) return null
   return pickBestFromCandidates({
     candidates,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     rng: args.rng,
     starsForName: (name) => EURO_CLUBS_PLAYER_STARS[args.club]?.[name] ?? null,
   })
@@ -400,7 +443,7 @@ export function pickBestEuroClubPlayer(args: {
 export function countAvailableEuroClubPlayers(args: {
   club: string
   position: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = EURO_CLUBS_RANDOM_PLAYERS[args.club]
   if (!pool) return 0
@@ -409,14 +452,14 @@ export function countAvailableEuroClubPlayers(args: {
   if (!candidates || candidates.length === 0) return 0
   return countAvailableFromCandidates({
     candidates,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     starsForName: (name) => EURO_CLUBS_PLAYER_STARS[args.club]?.[name] ?? null,
   })
 }
 
 function pickBestAnyOutfieldFromPool(args: {
   pool: Partial<Record<Top15RandomPosition, readonly (string | RandomPlayerCandidate)[]>>
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
   starsForName?: (name: string) => PlayerStars | null
 }): BestPick | null {
@@ -427,7 +470,7 @@ function pickBestAnyOutfieldFromPool(args: {
   if (outfield.length === 0) return null
   return pickBestFromCandidates({
     candidates: outfield,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     rng: args.rng,
     starsForName: args.starsForName,
   })
@@ -435,7 +478,7 @@ function pickBestAnyOutfieldFromPool(args: {
 
 function countAvailableAnyOutfieldFromPool(args: {
   pool: Partial<Record<Top15RandomPosition, readonly (string | RandomPlayerCandidate)[]>>
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   starsForName?: (name: string) => PlayerStars | null
 }): number {
   const positions = Object.keys(args.pool) as Top15RandomPosition[]
@@ -445,59 +488,59 @@ function countAvailableAnyOutfieldFromPool(args: {
   if (outfield.length === 0) return 0
   return countAvailableFromCandidates({
     candidates: outfield,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     starsForName: args.starsForName,
   })
 }
 
 export function pickBestAnyTop15OutfieldPlayer(args: {
   country: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = NATIONAL_TOP15_RANDOM_PLAYERS[args.country]
   if (!pool) return null
-  return pickBestAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  return pickBestAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
 }
 
 export function countAvailableAnyTop15OutfieldPlayers(args: {
   country: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = NATIONAL_TOP15_RANDOM_PLAYERS[args.country]
   if (!pool) return 0
-  return countAvailableAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys })
+  return countAvailableAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames })
 }
 
 export function pickBestAnyTop30OutfieldPlayer(args: {
   country: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = NATIONAL_TOP30_RANDOM_PLAYERS[args.country]
   if (!pool) return null
-  return pickBestAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys, rng: args.rng })
+  return pickBestAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames, rng: args.rng })
 }
 
 export function countAvailableAnyTop30OutfieldPlayers(args: {
   country: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = NATIONAL_TOP30_RANDOM_PLAYERS[args.country]
   if (!pool) return 0
-  return countAvailableAnyOutfieldFromPool({ pool, usedNameKeys: args.usedNameKeys })
+  return countAvailableAnyOutfieldFromPool({ pool, usedPlayerNames: args.usedPlayerNames })
 }
 
 export function pickBestAnyRplOutfieldPlayer(args: {
   club: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = RPL_RANDOM_PLAYERS[args.club]
   if (!pool) return null
   return pickBestAnyOutfieldFromPool({
     pool,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     rng: args.rng,
     starsForName: (name) => RPL_PLAYER_STARS[args.club]?.[name] ?? null,
   })
@@ -505,27 +548,27 @@ export function pickBestAnyRplOutfieldPlayer(args: {
 
 export function countAvailableAnyRplOutfieldPlayers(args: {
   club: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = RPL_RANDOM_PLAYERS[args.club]
   if (!pool) return 0
   return countAvailableAnyOutfieldFromPool({
     pool,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     starsForName: (name) => RPL_PLAYER_STARS[args.club]?.[name] ?? null,
   })
 }
 
 export function pickBestAnyEuroClubOutfieldPlayer(args: {
   club: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
   rng?: () => number
 }): BestPick | null {
   const pool = EURO_CLUBS_RANDOM_PLAYERS[args.club]
   if (!pool) return null
   return pickBestAnyOutfieldFromPool({
     pool,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     rng: args.rng,
     starsForName: (name) => EURO_CLUBS_PLAYER_STARS[args.club]?.[name] ?? null,
   })
@@ -533,13 +576,13 @@ export function pickBestAnyEuroClubOutfieldPlayer(args: {
 
 export function countAvailableAnyEuroClubOutfieldPlayers(args: {
   club: string
-  usedNameKeys: Set<string>
+  usedPlayerNames: readonly string[]
 }): number {
   const pool = EURO_CLUBS_RANDOM_PLAYERS[args.club]
   if (!pool) return 0
   return countAvailableAnyOutfieldFromPool({
     pool,
-    usedNameKeys: args.usedNameKeys,
+    usedPlayerNames: args.usedPlayerNames,
     starsForName: (name) => EURO_CLUBS_PLAYER_STARS[args.club]?.[name] ?? null,
   })
 }
