@@ -1,7 +1,7 @@
-import { RPL_CLUBS } from './rplClubs'
-import { TOP_50_EURO_CLUBS } from './topClubs'
-import { TOP_30_FOOTBALL_COUNTRIES_RU } from './topCountries'
-import type { DraftSourceKind } from './types'
+import { RPL_CLUBS } from '../data/rplClubs'
+import { TOP_50_EURO_CLUBS } from '../data/topClubs'
+import { TOP_30_FOOTBALL_COUNTRIES_RU } from '../data/topCountries'
+import type { DraftSourceKind } from '../core/types'
 
 export type ChaosDraftToken = { label: string; kind: DraftSourceKind }
 

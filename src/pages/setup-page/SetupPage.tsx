@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 
 import { RulesModal } from '@/shared/ui/rules-modal';
 
-import { FORMATIONS, type FormationId } from '@/entities/game/formations';
-import type { ColorSchemeId, GameMode, HintsBudget, TeamCount, TeamId, TeamState } from '@/entities/game/types';
+import { FORMATIONS, type FormationId } from '@/entities/game/core/formations';
+import type {
+  ColorSchemeId,
+  GameMode,
+  HintsBudget,
+  RandomPlayerHintsBudget,
+  TeamCount,
+  TeamId,
+  TeamState,
+} from '@/entities/game/core/types';
 
 import { FormationPreview } from '@/shared/ui/formation-preview';
 import { schemeDotColor } from '@/shared/lib/schemeAccent';
@@ -14,6 +22,7 @@ import {
   SETUP_BEST_LINEUP_BENCH_OPTIONS,
   SETUP_HINT_BUDGETS,
   SETUP_MODE_OPTIONS,
+  SETUP_RANDOM_PLAYER_HINT_BUDGETS,
   SETUP_SCHEME_OPTIONS,
   SETUP_TEAM_COUNTS,
 } from './setup-page.constants';
@@ -30,6 +39,8 @@ export interface SetupPageProps {
   onSetMode: (mode: GameMode) => void;
   hintsBudget: HintsBudget;
   onSetHintsBudget: (budget: HintsBudget) => void;
+  randomPlayerHintsBudget: RandomPlayerHintsBudget;
+  onSetRandomPlayerHintsBudget: (budget: RandomPlayerHintsBudget) => void;
   bestLineupIncludeBench: boolean;
   onSetBestLineupIncludeBench: (includeBench: boolean) => void;
   onStart: () => void;
@@ -52,7 +63,26 @@ function HintBudgetButton(props: HintBudgetButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
-      className={`setup-seg-btn${props.isActive ? ' setup-seg-btn--active' : ''}`}
+      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
+      aria-pressed={props.isActive}
+    >
+      {props.budget}
+    </button>
+  );
+}
+
+interface RandomHintBudgetButtonProps {
+  budget: RandomPlayerHintsBudget;
+  isActive: boolean;
+  onPick: () => void;
+}
+
+function RandomHintBudgetButton(props: RandomHintBudgetButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={props.onPick}
+      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
       aria-pressed={props.isActive}
     >
       {props.budget}
@@ -65,7 +95,7 @@ function CountButton(props: CountButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
-      className={`setup-seg-btn${props.isActive ? ' setup-seg-btn--active' : ''}`}
+      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
       aria-pressed={props.isActive}
     >
       {props.count}
@@ -85,10 +115,10 @@ function SchemeButton(props: SchemeButtonProps) {
     <button
       type="button"
       onClick={() => props.onPick(props.schemeId)}
-      className={`setup-scheme-btn${props.isActive ? ' setup-scheme-btn--active' : ''}`}
+      style={{ ...styles.schemeBtn, ...(props.isActive ? styles.schemeBtnActive : null) }}
       aria-pressed={props.isActive}
     >
-      <span className="setup-scheme-dot" style={{ background: schemeDotColor(props.schemeId) }} aria-hidden="true" />
+      <span style={{ ...styles.schemeDot, background: schemeDotColor(props.schemeId) }} aria-hidden="true" />
       {props.label}
     </button>
   );
@@ -105,9 +135,9 @@ interface TeamBoxProps {
 
 function TeamBox(props: TeamBoxProps) {
   return (
-    <div className="setup-team-box">
-      <div className="setup-team-name">{props.teamName}</div>
-      <div className="setup-scheme-row">
+    <div style={styles.teamBox}>
+      <div style={styles.teamNameDisplay}>{props.teamName}</div>
+      <div style={styles.schemeRowWithGap}>
         {SETUP_SCHEME_OPTIONS.map((option) => (
           <SchemeButton
             key={option.id}
@@ -118,19 +148,23 @@ function TeamBox(props: TeamBoxProps) {
           />
         ))}
       </div>
-      <div className="setup-formation-grid">
+      <div style={styles.formationGrid}>
         {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
           <button
             key={formationId}
             type="button"
             onClick={() => props.onPickFormation(formationId)}
             disabled={props.isFormationDisabled}
-            className={`setup-formation-card${
-              props.activeFormation === formationId ? ' setup-formation-card--active' : ''
-            }`}
+            style={{
+              ...styles.formationCard,
+              ...(props.activeFormation === formationId ? styles.formationCardActive : null),
+              ...(props.isFormationDisabled ? styles.formationCardDisabled : null),
+            }}
             title={formationLabelShort(formationId)}
           >
-            <div className="setup-formation-name">{formationLabelShort(formationId)}</div>
+            <div style={styles.formationCardTop}>
+              <div style={styles.formationName}>{formationLabelShort(formationId)}</div>
+            </div>
             <FormationPreview formation={formationId} />
           </button>
         ))}
@@ -144,139 +178,296 @@ export function SetupPage(props: SetupPageProps) {
 
   return (
     <>
-      <div className="fc-page">
-        <div className="setup-card">
-          <div className="setup-hero">
-            <div>
-              <div className="setup-kicker">
-                <span className="setup-kicker-icon" aria-hidden="true">
-                  ⚽
-                </span>
-                Настройка матча
+      <div style={styles.page}>
+        <div style={styles.card}>
+        <div style={styles.headerRow}>
+          <div>
+            <div style={styles.h1}>Футбольный драфт</div>
+            <div style={styles.sub}>
+              Выберите режим и количество игроков, затем настройте команды и начните игру.
+            </div>
+          </div>
+          <button type="button" onClick={() => setRulesOpen(true)} style={styles.rulesBtn}>
+            Правила
+          </button>
+        </div>
+
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Режим</div>
+          </div>
+          <div style={styles.modeRow}>
+            {SETUP_MODE_OPTIONS.map((option) => (
+              <button
+                key={option.mode}
+                type="button"
+                onClick={() => props.onSetMode(option.mode)}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.mode === option.mode ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.mode === option.mode}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Игроков</div>
+          </div>
+          <div style={styles.teamCountRow}>
+            {SETUP_TEAM_COUNTS.map((count) => (
+              <CountButton
+                key={count}
+                count={count}
+                isActive={props.teamOrder.length === count}
+                onPick={() => props.onSetTeamCount(count)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div style={styles.section}>
+          <div style={styles.hintsFormatRow}>
+            <div style={styles.hintsFormatCol}>
+              <div style={styles.labelRow}>
+                <div style={styles.label}>Подсказки «Лучший состав» на команду за игру</div>
               </div>
-              <h1 className="setup-title">Футбольный драфт</h1>
-              <p className="setup-sub">
-                Выберите режим и число игроков, задайте цвета и схемы команд — и выходите на поле.
-              </p>
+              <div style={styles.teamCountRow}>
+                {SETUP_HINT_BUDGETS.map((budget) => (
+                  <HintBudgetButton
+                    key={budget}
+                    budget={budget}
+                    isActive={props.hintsBudget === budget}
+                    onPick={() => props.onSetHintsBudget(budget)}
+                  />
+                ))}
+              </div>
             </div>
-            <button type="button" onClick={() => setRulesOpen(true)} className="setup-rules-btn">
-              Правила
-            </button>
+            <div style={styles.hintsFormatCol}>
+              <div style={styles.labelRow}>
+                <div style={styles.label}>Формат «Лучший состав» в подсказке</div>
+              </div>
+              <div style={styles.modeRow}>
+                {SETUP_BEST_LINEUP_BENCH_OPTIONS.map((option) => (
+                  <button
+                    key={String(option.includeBench)}
+                    type="button"
+                    onClick={() => props.onSetBestLineupIncludeBench(option.includeBench)}
+                    style={{
+                      ...styles.modeBtn,
+                      ...(props.bestLineupIncludeBench === option.includeBench ? styles.modeBtnActive : null),
+                    }}
+                    aria-pressed={props.bestLineupIncludeBench === option.includeBench}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+        </div>
 
-          <div className="setup-section">
-            <div className="setup-label-row">
-              <div className="setup-label">Режим игры</div>
+        {props.mode === 'nationalTop15' ||
+        props.mode === 'nationalTop30' ||
+        props.mode === 'rpl' ||
+        props.mode === 'clubs' ||
+        props.mode === 'chaos' ? (
+          <div style={styles.section}>
+            <div style={styles.labelRow}>
+              <div style={styles.label}>Подсказки «Случайный игрок» на команду за игру</div>
+              <div style={styles.muted}>Доступно для сборных/клубов и в режиме «Хаос»</div>
             </div>
-            <div className="setup-seg-row">
-              {SETUP_MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  onClick={() => props.onSetMode(option.mode)}
-                  className={`setup-seg-btn${props.mode === option.mode ? ' setup-seg-btn--active' : ''}`}
-                  aria-pressed={props.mode === option.mode}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="setup-section">
-            <div className="setup-label-row">
-              <div className="setup-label">Игроков за столом</div>
-            </div>
-            <div className="setup-seg-row">
-              {SETUP_TEAM_COUNTS.map((count) => (
-                <CountButton
-                  key={count}
-                  count={count}
-                  isActive={props.teamOrder.length === count}
-                  onPick={() => props.onSetTeamCount(count)}
+            <div style={styles.teamCountRow}>
+              {SETUP_RANDOM_PLAYER_HINT_BUDGETS.map((budget) => (
+                <RandomHintBudgetButton
+                  key={budget}
+                  budget={budget}
+                  isActive={props.randomPlayerHintsBudget === budget}
+                  onPick={() => props.onSetRandomPlayerHintsBudget(budget)}
                 />
               ))}
             </div>
           </div>
+        ) : null}
 
-          <div className="setup-section">
-            <div className="setup-hints-grid">
-              <div className="setup-hints-col">
-                <div className="setup-label-row">
-                  <div className="setup-label">Подсказки «Лучший состав» на команду за игру</div>
-                </div>
-                <div className="setup-seg-row">
-                  {SETUP_HINT_BUDGETS.map((budget) => (
-                    <HintBudgetButton
-                      key={budget}
-                      budget={budget}
-                      isActive={props.hintsBudget === budget}
-                      onPick={() => props.onSetHintsBudget(budget)}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="setup-hints-col">
-                <div className="setup-label-row">
-                  <div className="setup-label">Формат «Лучший состав» в подсказке</div>
-                </div>
-                <div className="setup-seg-row">
-                  {SETUP_BEST_LINEUP_BENCH_OPTIONS.map((option) => (
-                    <button
-                      key={String(option.includeBench)}
-                      type="button"
-                      onClick={() => props.onSetBestLineupIncludeBench(option.includeBench)}
-                      className={`setup-seg-btn${
-                        props.bestLineupIncludeBench === option.includeBench ? ' setup-seg-btn--active' : ''
-                      }`}
-                      aria-pressed={props.bestLineupIncludeBench === option.includeBench}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+        <div style={styles.section}>
+          <div style={styles.labelRow}>
+            <div style={styles.label}>Схема (каждая команда выбирает свою)</div>
+            {props.formationLocked ? <div style={styles.muted}>Смена схемы заблокирована после первого выбора</div> : null}
           </div>
+          <div style={styles.teamFormations}>
+            {props.teamOrder.map((teamId) => {
+              const team = props.teams[teamId];
 
-          <div className="setup-section">
-            <div className="setup-label-row">
-              <div className="setup-label">Схема (у каждой команды своя)</div>
-              {props.formationLocked ? (
-                <div className="setup-muted">Смена схемы заблокирована после первого выбора</div>
-              ) : null}
-            </div>
-            <div className="setup-team-grid">
-              {props.teamOrder.map((teamId) => {
-                const team = props.teams[teamId];
-
-                return (
-                  <TeamBox
-                    key={teamId}
-                    teamName={team.name}
-                    activeFormation={team.formation}
-                    colorScheme={team.colorScheme}
-                    isFormationDisabled={props.formationLocked}
-                    onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
-                    onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
-                  />
-                );
-              })}
-            </div>
+              return (
+                <TeamBox
+                  key={teamId}
+                  teamName={team.name}
+                  activeFormation={team.formation}
+                  colorScheme={team.colorScheme}
+                  isFormationDisabled={props.formationLocked}
+                  onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
+                  onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
+                />
+              );
+            })}
           </div>
-
-          <div className="setup-section">
-            <div className="setup-actions">
-              <button type="button" onClick={props.onStart} className="setup-primary-btn">
-                Начать игру
-              </button>
-            </div>
-          </div>
-
-          <div className="setup-version">Версия {APP_VERSION}</div>
         </div>
+
+        <div style={styles.section}>
+          <div style={styles.actions}>
+            <button type="button" onClick={props.onStart} style={styles.primaryBtn}>
+              Начать игру
+            </button>
+          </div>
+        </div>
+
+        <div style={styles.versionFoot}>Версия {APP_VERSION}</div>
       </div>
+    </div>
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  page: {
+    minHeight: '100vh',
+    display: 'grid',
+    placeItems: 'center',
+    padding: 24,
+  },
+  card: {
+    width: 'min(980px, 100%)',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 16,
+    padding: 20,
+    backdropFilter: 'blur(10px)',
+  },
+  headerRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 16,
+    alignItems: 'start',
+    flexWrap: 'wrap',
+  },
+  rulesBtn: {
+    padding: '9px 14px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontWeight: 650,
+    fontSize: 14,
+    flexShrink: 0,
+  },
+  h1: { fontSize: 28, fontWeight: 700, letterSpacing: -0.2 },
+  sub: { opacity: 0.85, marginTop: 6 },
+  section: { marginTop: 18 },
+  hintsFormatRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 20,
+    alignItems: 'flex-start',
+  },
+  hintsFormatCol: {
+    flex: '1 1 240px',
+    minWidth: 0,
+  },
+  labelRow: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' },
+  label: { fontWeight: 650 },
+  modeRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
+  modeBtn: {
+    padding: '9px 12px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    opacity: 0.92,
+    fontWeight: 650,
+  },
+  modeBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  teamCountRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
+  countBtn: {
+    padding: '8px 12px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    minWidth: 44,
+    opacity: 0.92,
+    fontWeight: 700,
+  },
+  countBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  teamFormations: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 },
+  teamBox: {
+    borderRadius: 16,
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(0,0,0,0.10)',
+    padding: 12,
+  },
+  teamNameDisplay: {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(0,0,0,0.18)',
+    fontWeight: 700,
+    letterSpacing: -0.2,
+  },
+  schemeRowWithGap: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 12 },
+  schemeBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 10px',
+    borderRadius: 999,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'rgba(0,0,0,0.18)',
+    color: 'inherit',
+    cursor: 'pointer',
+    opacity: 0.92,
+  },
+  schemeBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  schemeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    border: '1px solid rgba(0,0,0,0.35)',
+    boxShadow: '0 0 0 2px rgba(255,255,255,0.08) inset',
+  },
+  formationGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 },
+  formationCard: {
+    textAlign: 'left',
+    padding: 10,
+    borderRadius: 14,
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(0,0,0,0.22)',
+    color: 'inherit',
+    cursor: 'pointer',
+  },
+  formationCardActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  formationCardDisabled: { opacity: 0.6, cursor: 'not-allowed' },
+  formationCardTop: { display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+  formationName: { fontWeight: 800, letterSpacing: -0.2 },
+  actions: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' },
+  primaryBtn: {
+    padding: '10px 14px',
+    borderRadius: 12,
+    border: '1px solid rgba(128,168,255,0.8)',
+    background: 'rgba(68,120,255,0.35)',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontWeight: 650,
+  },
+  muted: { opacity: 0.75, fontSize: 13 },
+  versionFoot: { marginTop: 16, fontSize: 12, opacity: 0.55, textAlign: 'center' },
+};

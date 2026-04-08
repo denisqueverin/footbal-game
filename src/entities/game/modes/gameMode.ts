@@ -1,4 +1,4 @@
-import type { DraftSourceKind, GameMode } from './types'
+import type { DraftSourceKind, GameMode } from '../core/types'
 
 export function isNationalMode(mode: GameMode): boolean {
   return mode === 'nationalTop15' || mode === 'nationalTop30'

@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { pickRandomLoadingPhrases } from '@/entities/game/loadingPhrases';
-import { roundTurnOrder } from '@/entities/game/turnOrder';
-import type { GameState } from '@/entities/game/types';
+import { pickRandomLoadingPhrases } from '@/entities/game/data/loadingPhrases';
+import { roundTurnOrder } from '@/entities/game/core/turnOrder';
+import type { GameState } from '@/entities/game/core/types';
 
 import { APP_VERSION } from '@/shared/config/version';
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';

@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 
-import type { FormationId } from '@/entities/game/formations';
-import { createInitialGameState, gameReducer } from '@/entities/game/reducer';
-import type { ColorSchemeId, GameMode, HintsBudget, TeamCount, TeamId } from '@/entities/game/types';
+import type { FormationId } from '@/entities/game/core/formations';
+import { createInitialGameState, gameReducer } from '@/entities/game/core/reducer';
+import type {
+  ColorSchemeId,
+  GameMode,
+  HintsBudget,
+  RandomPlayerHintsBudget,
+  TeamCount,
+  TeamId,
+} from '@/entities/game/core/types';
 
 import { DrawRevealPage } from '@/pages/draw-reveal-page';
 import { GamePage } from '@/pages/game-page';
@@ -47,6 +54,10 @@ export function App() {
     dispatch({ type: 'setup/setHintsBudget', budget });
   }, []);
 
+  const handleSetupSetRandomPlayerHintsBudget = useCallback((budget: RandomPlayerHintsBudget) => {
+    dispatch({ type: 'setup/setRandomPlayerHintsBudget', budget });
+  }, []);
+
   const handleSetupSetBestLineupIncludeBench = useCallback((includeBench: boolean) => {
     dispatch({ type: 'setup/setBestLineupIncludeBench', includeBench });
   }, []);
@@ -85,6 +96,14 @@ export function App() {
     dispatch({ type: 'draft/useBestLineupHint', team });
   }, []);
 
+  const handleUseRandomPlayerHint = useCallback((team: TeamId, slotId: string) => {
+    dispatch({ type: 'draft/useRandomPlayerHint', team, slotId });
+  }, []);
+
+  const handleClearRandomPlayerHintError = useCallback(() => {
+    dispatch({ type: 'draft/clearRandomPlayerHintError' });
+  }, []);
+
   if (state.phase === 'setup') {
     return (
       <SetupPage
@@ -98,6 +117,8 @@ export function App() {
         onSetMode={handleSetupSetMode}
         hintsBudget={state.hintsBudgetPerPlayer}
         onSetHintsBudget={handleSetupSetHintsBudget}
+        randomPlayerHintsBudget={state.randomPlayerHintsBudgetPerPlayer}
+        onSetRandomPlayerHintsBudget={handleSetupSetRandomPlayerHintsBudget}
         bestLineupIncludeBench={state.bestLineupIncludeBench}
         onSetBestLineupIncludeBench={handleSetupSetBestLineupIncludeBench}
         onStart={handleSetupStart}
@@ -128,6 +149,8 @@ export function App() {
       onSetDraftTimerPaused={handleSetDraftTimerPaused}
       onSetPickPlayerName={handleSetPickPlayerName}
       onUseBestLineupHint={handleUseBestLineupHint}
+      onUseRandomPlayerHint={handleUseRandomPlayerHint}
+      onClearRandomPlayerHintError={handleClearRandomPlayerHintError}
     />
   );
 }

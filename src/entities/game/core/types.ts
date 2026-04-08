@@ -6,6 +6,9 @@ export type TeamCount = 2 | 3 | 4
 /** Сколько подсказок «Лучший состав» у каждой команды за всю игру (выбор в меню). */
 export type HintsBudget = 1 | 2 | 3
 
+/** Сколько подсказок «Случайный игрок» у каждой команды за всю игру (Сборные ТОП-15 и РПЛ). */
+export type RandomPlayerHintsBudget = 1 | 2 | 3 | 11
+
 export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
 
 export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'chaos'
@@ -45,6 +48,13 @@ export type GameState = {
   hintsRemaining: Record<TeamId, number>
   /** Уже использовали подсказку в текущем раунде (сбрасывается при новом раунде). */
   hintUsedThisRound: Record<TeamId, boolean>
+
+  /** Лимит подсказок «Случайный игрок» на команду за игру (1/2/3/11). */
+  randomPlayerHintsBudgetPerPlayer: RandomPlayerHintsBudget
+  /** Сколько подсказок «Случайный игрок» осталось у каждой команды. */
+  randomPlayerHintsRemaining: Record<TeamId, number>
+  /** Последняя ошибка подсказки «Случайный игрок» (для модалки). */
+  randomPlayerHintError: { team: TeamId; sourceLabel: string; position: string } | null
 
   /** Случайное смещение стартового хода в раунде 1 (0 .. teamOrder.length-1). */
   draftTurnOrderBase: number
