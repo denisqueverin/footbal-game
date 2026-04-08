@@ -32,7 +32,6 @@ export const TOP_50_EURO_CLUBS = [
   'Sevilla',
   'Spartak Moscow',
   'Tottenham Hotspur',
-  'VfL Wolfsburg',
   'Werder Bremen',
   'Zenit Saint Petersburg',
   'Valencia',

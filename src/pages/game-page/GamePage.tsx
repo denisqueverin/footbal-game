@@ -8,6 +8,8 @@ import {
   useState,
 } from 'react';
 
+import { useMediaQuery } from '@/shared/lib/useMediaQuery';
+
 import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import { roundTurnOrder } from '@/entities/game/core/turnOrder';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
@@ -73,6 +75,8 @@ export interface GamePageProps {
 
 export function GamePage(props: GamePageProps) {
   const { state } = props;
+  const isNarrow = useMediaQuery('(max-width: 640px)');
+  const styles = useMemo(() => getGamePageStyles(isNarrow), [isNarrow]);
   const activeTeam = state.turn;
   const cpuTurnLockRef = useRef<string | null>(null);
 
@@ -633,43 +637,103 @@ export function GamePage(props: GamePageProps) {
       {isEditingLineups ? (
         <LineupEditor state={state} onPickNameChange={handleLineupPickNameChange} />
       ) : (
-        <div style={styles.boards}>
-          {state.teamOrder.map((teamId) => (
-            <div key={teamId} style={styles.side}>
-              <TeamBoard
-                team={state.teams[teamId]}
-                formation={state.teams[teamId].formation}
-                mode={state.mode}
-                selectedSlotId={activeTeam === teamId ? slotId : null}
-                onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
-                disabled={activeTeam !== teamId}
-                pendingPick={
-                  state.gameKind === 'vsCpu' &&
-                  state.turn === 'team2' &&
-                  teamId === 'team2' &&
-                  cpuPending != null
-                    ? { slotId: cpuPending.slotId }
-                    : null
-                }
-                bestLineupHint={
-                  supportsBestLineupHint(state.mode) &&
-                  state.hintsBudgetPerPlayer > 0 &&
-                  state.phase === 'drafting' &&
-                  !isEditingLineups &&
-                  Boolean(state.currentCountry)
-                    ? {
-                        remaining: state.hintsRemaining[teamId],
-                        budget: state.hintsBudgetPerPlayer,
-                        usedThisRound: state.hintUsedThisRound[teamId],
-                        onRequest: () => handleBestLineupRequest(teamId),
-                      }
-                    : null
-                }
+        <>
+          <div style={styles.bottom}>
+            <div style={styles.formRow}>
+              <input
+                value={playerName}
+                onChange={handlePlayerNameChange}
+                onKeyDown={handlePlayerNameKeyDown}
+                placeholder="Имя футболиста (свободный ввод)"
+                style={styles.input}
               />
-              {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
+              <div style={styles.slotPreview}>
+                Слот: <b>{slotId ?? 'не выбран'}</b>
+              </div>
+              {state.mode === 'nationalTop15' ||
+              state.mode === 'nationalTop30' ||
+              state.mode === 'rpl' ||
+              state.mode === 'clubs' ||
+              state.mode === 'chaos' ? (
+                <button
+                  type="button"
+                  onClick={handleUseRandomHint}
+                  disabled={!canUseRandomHint}
+                  style={{
+                    ...styles.randomHintBtn,
+                    ...(!canUseRandomHint ? styles.randomHintBtnDisabled : null),
+                  }}
+                  title={
+                    canUseRandomHint
+                      ? 'Поставить случайного игрока этой позиции из текущей сборной'
+                      : randomHintRemaining <= 0
+                        ? 'Подсказки «Случайный игрок» закончились'
+                        : !slotId
+                          ? 'Сначала выберите слот'
+                          : activeSlotTaken
+                            ? 'Слот уже занят'
+                            : !state.currentCountry
+                              ? 'Нет текущей сборной для раунда'
+                              : undefined
+                  }
+                >
+                  Случайный игрок ({randomHintRemaining})
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleConfirmPick}
+                disabled={!canConfirm}
+                style={{
+                  ...styles.primaryBtn,
+                  ...(!canConfirm ? styles.primaryBtnDisabled : null),
+                }}
+              >
+                Подтвердить
+              </button>
             </div>
-          ))}
-        </div>
+            <div style={styles.hint}>
+              Выберите свободный слот на поле ниже и введите имя игрока, затем нажмите «Подтвердить».
+            </div>
+          </div>
+          <div style={styles.boards}>
+            {state.teamOrder.map((teamId) => (
+              <div key={teamId} style={styles.side}>
+                <TeamBoard
+                  team={state.teams[teamId]}
+                  formation={state.teams[teamId].formation}
+                  mode={state.mode}
+                  selectedSlotId={activeTeam === teamId ? slotId : null}
+                  onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
+                  disabled={activeTeam !== teamId}
+                  pendingPick={
+                    state.gameKind === 'vsCpu' &&
+                    state.turn === 'team2' &&
+                    teamId === 'team2' &&
+                    cpuPending != null
+                      ? { slotId: cpuPending.slotId }
+                      : null
+                  }
+                  bestLineupHint={
+                    supportsBestLineupHint(state.mode) &&
+                    state.hintsBudgetPerPlayer > 0 &&
+                    state.phase === 'drafting' &&
+                    !isEditingLineups &&
+                    Boolean(state.currentCountry)
+                      ? {
+                          remaining: state.hintsRemaining[teamId],
+                          budget: state.hintsBudgetPerPlayer,
+                          usedThisRound: state.hintUsedThisRound[teamId],
+                          onRequest: () => handleBestLineupRequest(teamId),
+                        }
+                      : null
+                  }
+                />
+                {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {isEditingLineups ? (
@@ -678,83 +742,26 @@ export function GamePage(props: GamePageProps) {
             Редактируйте имена в списке выше и нажмите «Завершить редактирование», чтобы продолжить игру.
           </div>
         </div>
-      ) : (
-        <div style={styles.bottom}>
-          <div style={styles.formRow}>
-            <input
-              value={playerName}
-              onChange={handlePlayerNameChange}
-              onKeyDown={handlePlayerNameKeyDown}
-              placeholder="Имя футболиста (свободный ввод)"
-              style={styles.input}
-            />
-            <div style={styles.slotPreview}>
-              Слот: <b>{slotId ?? 'не выбран'}</b>
-            </div>
-            {state.mode === 'nationalTop15' ||
-            state.mode === 'nationalTop30' ||
-            state.mode === 'rpl' ||
-            state.mode === 'clubs' ||
-            state.mode === 'chaos' ? (
-              <button
-                type="button"
-                onClick={handleUseRandomHint}
-                disabled={!canUseRandomHint}
-                style={{
-                  ...styles.randomHintBtn,
-                  ...(!canUseRandomHint ? styles.randomHintBtnDisabled : null),
-                }}
-                title={
-                  canUseRandomHint
-                    ? 'Поставить случайного игрока этой позиции из текущей сборной'
-                    : randomHintRemaining <= 0
-                      ? 'Подсказки «Случайный игрок» закончились'
-                      : !slotId
-                        ? 'Сначала выберите слот'
-                        : activeSlotTaken
-                          ? 'Слот уже занят'
-                          : !state.currentCountry
-                            ? 'Нет текущей сборной для раунда'
-                            : undefined
-                }
-              >
-                Случайный игрок ({randomHintRemaining})
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleConfirmPick}
-              disabled={!canConfirm}
-              style={{
-                ...styles.primaryBtn,
-                ...(!canConfirm ? styles.primaryBtnDisabled : null),
-              }}
-            >
-              Подтвердить
-            </button>
-          </div>
-          <div style={styles.hint}>
-            Выберите свободный слот на активной стороне и введите имя игрока, затем нажмите «Подтвердить».
-          </div>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-const styles: Record<string, CSSProperties> = {
+function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
+  return {
   page: { minHeight: '100vh', display: 'flex', flexDirection: 'column' },
   topbar: {
     display: 'grid',
-    gridTemplateColumns: '1fr auto 1fr',
+    gridTemplateColumns: isNarrow ? '1fr' : '1fr auto 1fr',
     alignItems: 'center',
-    gap: 12,
-    padding: '16px 18px',
+    gap: isNarrow ? 14 : 12,
+    padding: isNarrow ? 'max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left))' : '16px 18px',
     borderBottom: '1px solid rgba(255,255,255,0.12)',
     background: 'rgba(255,255,255,0.04)',
     backdropFilter: 'blur(10px)',
+    textAlign: isNarrow ? 'center' : undefined,
   },
-  topbarLeft: { minWidth: 0 },
+  topbarLeft: isNarrow ? { minWidth: 0, justifySelf: 'center' } : { minWidth: 0 },
   topbarCenter: {
     textAlign: 'center',
     justifySelf: 'center',
@@ -792,11 +799,12 @@ const styles: Record<string, CSSProperties> = {
   country: { opacity: 0.9 },
   topbarRight: {
     display: 'flex',
-    gap: 12,
+    gap: isNarrow ? 8 : 12,
     alignItems: 'center',
     flexWrap: 'wrap',
-    justifyContent: 'end',
-    justifySelf: 'end',
+    justifyContent: isNarrow ? 'center' : 'end',
+    justifySelf: isNarrow ? 'center' : 'end',
+    width: isNarrow ? '100%' : undefined,
   },
   ghostBtn: {
     padding: '8px 10px',
@@ -821,12 +829,16 @@ const styles: Record<string, CSSProperties> = {
   boards: {
     flex: '1 1 auto',
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: 14,
-    padding: 14,
+    gridTemplateColumns: isNarrow
+      ? '1fr'
+      : 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
+    gap: isNarrow ? 12 : 14,
+    padding: isNarrow
+      ? '10px max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))'
+      : '14px 14px max(14px, env(safe-area-inset-bottom)) 14px',
     alignItems: 'stretch',
   },
-  side: { position: 'relative', minHeight: 360 },
+  side: { position: 'relative', minHeight: isNarrow ? 280 : 360 },
   overlay: {
     position: 'absolute',
     inset: 0,
@@ -836,21 +848,35 @@ const styles: Record<string, CSSProperties> = {
     pointerEvents: 'auto',
   },
   bottom: {
-    borderTop: '1px solid rgba(255,255,255,0.12)',
-    padding: '14px 18px',
+    borderBottom: '1px solid rgba(255,255,255,0.12)',
+    padding: isNarrow
+      ? '12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left))'
+      : '14px 18px',
     background: 'rgba(255,255,255,0.04)',
     backdropFilter: 'blur(10px)',
+    flexShrink: 0,
   },
   bottomHintOnly: {
     borderTop: '1px solid rgba(255,255,255,0.12)',
-    padding: '12px 18px 16px',
+    padding: isNarrow
+      ? '12px max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))'
+      : '12px 18px 16px',
     background: 'rgba(255,255,255,0.03)',
     backdropFilter: 'blur(10px)',
   },
-  formRow: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' },
+  formRow: {
+    display: 'flex',
+    gap: 10,
+    alignItems: isNarrow ? 'stretch' : 'center',
+    marginTop: 0,
+    flexWrap: 'wrap',
+    flexDirection: isNarrow ? 'column' : 'row',
+  },
   input: {
-    flex: '1 1 320px',
-    minWidth: 260,
+    flex: isNarrow ? '1 1 auto' : '1 1 320px',
+    width: isNarrow ? '100%' : undefined,
+    minWidth: isNarrow ? 0 : 260,
+    maxWidth: isNarrow ? '100%' : undefined,
     padding: '10px 12px',
     borderRadius: 12,
     border: '1px solid rgba(255,255,255,0.14)',
@@ -883,4 +909,5 @@ const styles: Record<string, CSSProperties> = {
   randomHintBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
   hint: { marginTop: 8, opacity: 0.75, fontSize: 13 },
   versionTag: { fontSize: 12, opacity: 0.55, marginRight: 4 },
-};
+  };
+}

@@ -40,7 +40,6 @@ export const CLUB_TO_COUNTRY_RU: Record<string, string> = {
   Sevilla: 'Испания',
   'Spartak Moscow': 'Россия',
   'Tottenham Hotspur': 'Англия',
-  'VfL Wolfsburg': 'Германия',
   'Werder Bremen': 'Германия',
   'Zenit Saint Petersburg': 'Россия',
   Valencia: 'Испания',
