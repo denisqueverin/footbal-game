@@ -1,4 +1,4 @@
-import type { GameState } from '@/entities/game/types';
+import type { GameState } from '@/entities/game/core/types';
 
 export function getDraftElapsedMs(state: GameState, now: number): number {
   if (!state.draftTimerStartedAt) {

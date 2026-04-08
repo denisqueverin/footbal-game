@@ -1,8 +1,11 @@
-import type { ColorSchemeId, GameMode, HintsBudget, TeamCount } from '@/entities/game/types';
+import type { ColorSchemeId, GameMode, HintsBudget, TeamCount } from '@/entities/game/core/types';
 
 export const SETUP_TEAM_COUNTS: readonly TeamCount[] = [2, 3, 4];
 
 export const SETUP_HINT_BUDGETS: readonly HintsBudget[] = [1, 2, 3];
+
+/** Подсказка «Случайный игрок» (только режим «Сборные ТОП-15»). */
+export const SETUP_RANDOM_PLAYER_HINT_BUDGETS: readonly (1 | 2 | 3 | 11)[] = [1, 2, 3, 11];
 
 export const SETUP_MODE_OPTIONS: ReadonlyArray<{ mode: GameMode; label: string }> = [
   { mode: 'nationalTop15', label: 'Сборные ТОП-15' },

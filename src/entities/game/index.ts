@@ -1,12 +1,12 @@
-export { createInitialGameState, gameReducer } from './reducer';
-export type { GameAction } from './reducer';
+export { createInitialGameState, gameReducer } from './core/reducer';
+export type { GameAction } from './core/reducer';
 export {
   isChaosMode,
   isClubsMode,
   isNationalDraftSource,
   isNationalMode,
   supportsBestLineupHint,
-} from './gameMode';
+} from './modes/gameMode';
 export type {
   ColorSchemeId,
   DraftSourceKind,
@@ -14,7 +14,8 @@ export type {
   GamePhase,
   GameState,
   HintsBudget,
+  RandomPlayerHintsBudget,
   TeamCount,
   TeamId,
   TeamState,
-} from './types';
+} from './core/types';

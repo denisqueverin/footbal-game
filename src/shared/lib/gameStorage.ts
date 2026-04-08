@@ -1,12 +1,13 @@
-import { assignPlaceholderTeamNames } from '@/entities/game/teamNames';
+import { assignPlaceholderTeamNames } from '@/entities/game/data/teamNames';
 import type {
   DraftSourceKind,
   GameMode,
   GamePhase,
   GameState,
   HintsBudget,
+  RandomPlayerHintsBudget,
   TeamId,
-} from '@/entities/game/types';
+} from '@/entities/game/core/types';
 
 import { APP_VERSION } from '@/shared/config/version';
 
@@ -23,7 +24,15 @@ function isHintsBudget(n: number): n is HintsBudget {
   return n === 1 || n === 2 || n === 3;
 }
 
+function isRandomPlayerHintsBudget(n: number): n is RandomPlayerHintsBudget {
+  return n === 1 || n === 2 || n === 3 || n === 11;
+}
+
 function defaultHintsRemaining(budget: number): Record<TeamId, number> {
+  return { team1: budget, team2: budget, team3: budget, team4: budget }
+}
+
+function defaultRandomPlayerHintsRemaining(budget: number): Record<TeamId, number> {
   return { team1: budget, team2: budget, team3: budget, team4: budget }
 }
 
@@ -44,6 +53,9 @@ function normalizeGameState(state: GameState): GameState {
     hintsRemaining?: Record<TeamId, number>;
     hintUsedThisRound?: Record<TeamId, boolean>;
     bestLineupIncludeBench?: boolean;
+    randomPlayerHintsBudgetPerPlayer?: RandomPlayerHintsBudget;
+    randomPlayerHintsRemaining?: Record<TeamId, number>;
+    randomPlayerHintError?: { team: TeamId; sourceLabel: string; position: string } | null;
     mode?: unknown;
     chaosDraftSourceKindsRemaining?: DraftSourceKind[];
     chaosDraftSourceKindsAll?: DraftSourceKind[];
@@ -80,6 +92,15 @@ function normalizeGameState(state: GameState): GameState {
 
   const mode = normalizeMode(legacy.mode ?? state.mode)
 
+  const randomBudget: RandomPlayerHintsBudget = isRandomPlayerHintsBudget(
+    legacy.randomPlayerHintsBudgetPerPlayer ?? 0,
+  )
+    ? legacy.randomPlayerHintsBudgetPerPlayer
+    : 1
+
+  const randomPlayerHintsRemaining =
+    legacy.randomPlayerHintsRemaining ?? defaultRandomPlayerHintsRemaining(randomBudget)
+
   return {
     ...state,
     mode,
@@ -87,6 +108,9 @@ function normalizeGameState(state: GameState): GameState {
     hintsBudgetPerPlayer: budget,
     hintsRemaining,
     hintUsedThisRound,
+    randomPlayerHintsBudgetPerPlayer: randomBudget,
+    randomPlayerHintsRemaining,
+    randomPlayerHintError: legacy.randomPlayerHintError ?? null,
     chaosDraftSourceKindsRemaining: legacy.chaosDraftSourceKindsRemaining ?? [],
     chaosDraftSourceKindsAll: legacy.chaosDraftSourceKindsAll ?? [],
     currentDraftSourceKind: legacy.currentDraftSourceKind ?? null,

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
+import { formationRowsForDisplay, type FormationId } from '@/entities/game/core/formations';
 
 export interface FormationPreviewProps {
   formation: FormationId;

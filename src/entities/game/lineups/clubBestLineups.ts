@@ -6,7 +6,7 @@ import { CLUB_LINEUPS_PART3 } from './clubBestLineups.part3'
 import { CLUB_LINEUPS_PART4 } from './clubBestLineups.part4'
 import { CLUB_LINEUPS_PART5 } from './clubBestLineups.part5'
 import { RPL_CLUB_LINEUPS } from './rplClubLineups'
-import type { GameMode } from './types'
+import type { GameMode } from '../core/types'
 
 export const CLUB_LINEUPS_FULL: Record<string, ClubLineupData> = {
   ...CLUB_LINEUPS_PART1,

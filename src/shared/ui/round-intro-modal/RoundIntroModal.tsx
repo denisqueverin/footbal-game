@@ -1,9 +1,9 @@
 import type { MouseEvent } from 'react';
 
-import { getClubFlagUrl } from '@/entities/game/clubCountries';
-import { isChaosMode, isClubsMode, isNationalDraftSource } from '@/entities/game/gameMode';
-import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
-import type { DraftSourceKind, GameMode } from '@/entities/game/types';
+import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
+import { isChaosMode, isClubsMode, isNationalDraftSource } from '@/entities/game/modes/gameMode';
+import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
+import type { DraftSourceKind, GameMode } from '@/entities/game/core/types';
 
 export interface RoundIntroModalProps {
   round: number;

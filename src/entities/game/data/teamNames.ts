@@ -1,4 +1,4 @@
-import type { GameState, TeamId } from './types'
+import type { GameState, TeamId } from '../core/types'
 
 const TEAM_IDS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
 

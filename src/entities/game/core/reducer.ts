@@ -1,25 +1,34 @@
 import { FORMATIONS, type FormationId } from './formations'
-import { buildChaosDraftPool } from './chaosDraftPool'
-import { supportsBestLineupHint } from './gameMode'
-import { TOP_50_EURO_CLUBS } from './topClubs'
-import { RPL_CLUBS } from './rplClubs'
+import { buildChaosDraftPool } from '../modes/chaosDraftPool'
+import { supportsBestLineupHint } from '../modes/gameMode'
+import { TOP_50_EURO_CLUBS } from '../data/topClubs'
+import { RPL_CLUBS } from '../data/rplClubs'
 import type {
   ColorSchemeId,
+  DraftSourceKind,
   GameMode,
   GameState,
   HintsBudget,
+  RandomPlayerHintsBudget,
   SlotPick,
   TeamCount,
   TeamId,
   TeamState,
 } from './types'
-import { areTeamNamesPlaceholder, assignRandomTeamNames } from './teamNames'
+import { areTeamNamesPlaceholder, assignRandomTeamNames } from '../data/teamNames'
 import { drawRandom } from './random'
+import {
+  existingNameKeys,
+  pickRandomEuroClubPlayer,
+  pickRandomRplPlayer,
+  pickRandomTop15Player,
+  pickRandomTop30Player,
+} from '../hints/randomPlayerHint'
 import {
   TOP_15_FOOTBALL_COUNTRIES_RU,
   TOP_30_FOOTBALL_COUNTRIES_RU,
   pickRandomUnique,
-} from './topCountries'
+} from '../data/topCountries'
 import { roundTurnOrder } from './turnOrder'
 
 export type GameAction =
@@ -31,11 +40,14 @@ export type GameAction =
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
   | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
   | { type: 'setup/setHintsBudget'; budget: HintsBudget }
+  | { type: 'setup/setRandomPlayerHintsBudget'; budget: RandomPlayerHintsBudget }
   | { type: 'setup/setBestLineupIncludeBench'; includeBench: boolean }
   | { type: 'draft/confirmPick'; team: TeamId; slotId: string; playerName: string }
   | { type: 'draft/setDraftTimerPaused'; paused: boolean }
   | { type: 'draft/setPickPlayerName'; team: TeamId; slotId: string; playerName: string }
   | { type: 'draft/useBestLineupHint'; team: TeamId }
+  | { type: 'draft/useRandomPlayerHint'; team: TeamId; slotId: string }
+  | { type: 'draft/clearRandomPlayerHintError' }
   | { type: 'game/reset' }
 
 const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
@@ -67,6 +79,10 @@ function slotPickForFormationSlot(team: TeamState, slotId: string): SlotPick | n
 }
 
 function createHintsRemaining(budget: number): Record<TeamId, number> {
+  return { team1: budget, team2: budget, team3: budget, team4: budget }
+}
+
+function createRandomPlayerHintsRemaining(budget: number): Record<TeamId, number> {
   return { team1: budget, team2: budget, team3: budget, team4: budget }
 }
 
@@ -159,6 +175,10 @@ export function createInitialGameState(): GameState {
     hintsRemaining: createHintsRemaining(1),
     hintUsedThisRound: createHintUsedThisRound(),
 
+    randomPlayerHintsBudgetPerPlayer: 1,
+    randomPlayerHintsRemaining: createRandomPlayerHintsRemaining(1),
+    randomPlayerHintError: null,
+
     countriesAll: [],
     countriesRemaining: [],
     chaosDraftSourceKindsRemaining: [],
@@ -224,6 +244,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase !== 'setup') return state
       return { ...state, hintsBudgetPerPlayer: action.budget }
     }
+    case 'setup/setRandomPlayerHintsBudget': {
+      if (state.phase !== 'setup') return state
+      return { ...state, randomPlayerHintsBudgetPerPlayer: action.budget }
+    }
     case 'setup/setBestLineupIncludeBench': {
       if (state.phase !== 'setup') return state
       return { ...state, bestLineupIncludeBench: action.includeBench }
@@ -256,6 +280,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const n = order.length
       const draftTurnOrderBase = n > 0 ? Math.floor(Math.random() * n) : 0
       const hintBudget = state.hintsBudgetPerPlayer
+      const randomPlayerHintBudget = state.randomPlayerHintsBudgetPerPlayer
 
       const nextTeams: GameState['teams'] = { ...state.teams }
       for (const teamId of order) {
@@ -269,6 +294,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         draftTurnOrderBase,
         hintsRemaining: createHintsRemaining(hintBudget),
         hintUsedThisRound: createHintUsedThisRound(),
+        randomPlayerHintsRemaining: createRandomPlayerHintsRemaining(
+          state.mode === 'nationalTop15' ||
+            state.mode === 'nationalTop30' ||
+            state.mode === 'rpl' ||
+            state.mode === 'clubs' ||
+            state.mode === 'chaos'
+            ? randomPlayerHintBudget
+            : 0,
+        ),
+        randomPlayerHintError: null,
         countriesAll: items,
         countriesRemaining: items,
         chaosDraftSourceKindsAll: chaosKindsAll,
@@ -333,6 +368,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
     }
+    case 'draft/clearRandomPlayerHintError': {
+      if (state.randomPlayerHintError == null) return state
+      return { ...state, randomPlayerHintError: null }
+    }
     case 'draft/setPickPlayerName': {
       if (state.phase !== 'drafting') return state
       const team = state.teams[action.team]
@@ -369,6 +408,126 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       return nextState
+    }
+    case 'draft/useRandomPlayerHint': {
+      if (state.phase !== 'drafting') return state
+      if (
+        state.mode !== 'nationalTop15' &&
+        state.mode !== 'nationalTop30' &&
+        state.mode !== 'rpl' &&
+        state.mode !== 'clubs' &&
+        state.mode !== 'chaos'
+      )
+        return state
+      if (state.turn !== action.team) return state
+      if (!state.currentCountry) return state
+      if (!state.teamOrder.includes(action.team)) return state
+
+      const remaining = state.randomPlayerHintsRemaining[action.team] ?? 0
+      if (remaining <= 0) return state
+
+      const team = state.teams[action.team]
+      const existing = team.picksBySlotId[action.slotId]
+      if (!existing) return state
+      if (existing.playerName) return state
+
+      const position = existing.label
+      const usedKeys = existingNameKeys(state)
+      const chaosKind: DraftSourceKind | null = state.mode === 'chaos' ? (state.currentDraftSourceKind ?? null) : null
+      const effectiveMode: GameMode =
+        state.mode === 'chaos'
+          ? chaosKind === 'rplClub'
+            ? 'rpl'
+            : chaosKind === 'club'
+              ? 'clubs'
+              : 'nationalTop30'
+          : state.mode
+
+      const picked =
+        effectiveMode === 'nationalTop15'
+          ? pickRandomTop15Player({
+              country: state.currentCountry,
+              position,
+              usedNameKeys: usedKeys,
+            })
+          : effectiveMode === 'nationalTop30'
+            ? pickRandomTop30Player({
+                country: state.currentCountry,
+                position,
+                usedNameKeys: usedKeys,
+              })
+            : effectiveMode === 'rpl'
+              ? pickRandomRplPlayer({
+                  club: state.currentCountry,
+                  position,
+                  usedNameKeys: usedKeys,
+                })
+              : pickRandomEuroClubPlayer({
+                  club: state.currentCountry,
+                  position,
+                  usedNameKeys: usedKeys,
+                })
+
+      if (!picked) {
+        return {
+          ...state,
+          randomPlayerHintsRemaining: {
+            ...state.randomPlayerHintsRemaining,
+            [action.team]: remaining - 1,
+          },
+          randomPlayerHintError: { team: action.team, sourceLabel: state.currentCountry, position },
+        }
+      }
+
+      const nextTeam: TeamState = {
+        ...team,
+        picksBySlotId: {
+          ...team.picksBySlotId,
+          [action.slotId]: {
+            ...existing,
+            playerName: picked.playerName,
+            country: state.currentCountry,
+          },
+        },
+      }
+
+      const nextState: GameState = {
+        ...state,
+        formationLocked: true,
+        randomPlayerHintsRemaining: {
+          ...state.randomPlayerHintsRemaining,
+          [action.team]: remaining - 1,
+        },
+        randomPlayerHintError: null,
+        teams: { ...state.teams, [action.team]: nextTeam },
+      }
+
+      if (allActiveTeamsFull(nextState)) {
+        return { ...nextState, phase: 'finished' }
+      }
+
+      const orderThisRound = roundTurnOrder(
+        nextState.teamOrder,
+        nextState.draftTurnOrderBase,
+        nextState.roundIndex,
+      )
+      const nextTurn = nextTeamId(action.team, orderThisRound)
+      const first = orderThisRound[0] ?? nextTurn
+      if (nextTurn !== first) {
+        return { ...nextState, turn: nextTurn }
+      }
+
+      // last team confirmed: advance to next item and back to first team of the new round
+      const advanced = drawNextCountry({ ...nextState, turn: first })
+      if (!advanced.currentCountry) {
+        return { ...advanced, phase: 'finished' }
+      }
+      const firstNextRound = roundTurnOrder(
+        advanced.teamOrder,
+        advanced.draftTurnOrderBase,
+        advanced.roundIndex,
+      )[0]
+      return { ...advanced, turn: firstNextRound ?? advanced.turn }
     }
     case 'draft/confirmPick': {
       if (state.phase !== 'drafting') return state

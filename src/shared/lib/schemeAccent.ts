@@ -1,4 +1,4 @@
-import type { ColorSchemeId } from '@/entities/game/types';
+import type { ColorSchemeId } from '@/entities/game/core/types';
 
 /** Цвет кружка схемы (как на экране настройки команд). */
 export function schemeDotColor(colorScheme: ColorSchemeId): string {

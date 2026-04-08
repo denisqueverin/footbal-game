@@ -1,4 +1,4 @@
-import type { GameState, TeamId } from '@/entities/game/types';
+import type { GameState, TeamId } from '@/entities/game/core/types';
 
 import { schemeAccent } from '@/shared/lib/schemeAccent';
 

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 
-import { FORMATIONS, type FormationId } from '@/entities/game/formations';
-import type { ColorSchemeId, GameState, TeamId } from '@/entities/game/types';
+import { FORMATIONS, type FormationId } from '@/entities/game/core/formations';
+import type { ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
 
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 import { schemeAccent, schemeDotColor } from '@/shared/lib/schemeAccent';

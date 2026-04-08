@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from 'react';
 
-import { getLineupSectionForClub } from '@/entities/game/clubBestLineups';
-import { isChaosMode, isClubsMode, isNationalMode } from '@/entities/game/gameMode';
-import { getNationalLineupForCountry } from '@/entities/game/nationalBestLineups';
-import { getClubFlagUrl } from '@/entities/game/clubCountries';
-import type { DraftSourceKind, GameMode } from '@/entities/game/types';
-import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
+import { getLineupSectionForClub } from '@/entities/game/lineups/clubBestLineups';
+import { isChaosMode, isClubsMode, isNationalMode } from '@/entities/game/modes/gameMode';
+import { getNationalLineupForCountry } from '@/entities/game/lineups/nationalBestLineups';
+import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
+import type { DraftSourceKind, GameMode } from '@/entities/game/core/types';
+import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 
 export interface BestLineupModalProps {
   open: boolean;

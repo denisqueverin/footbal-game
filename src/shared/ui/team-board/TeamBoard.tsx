@@ -1,9 +1,11 @@
-import { inferChaosSourceKind } from '@/entities/game/chaosDraftPool';
-import { getClubFlagUrl } from '@/entities/game/clubCountries';
-import { formationRowsForDisplay, type FormationId } from '@/entities/game/formations';
-import { getCountryFlagUrlRu } from '@/entities/game/topCountries';
-import { isChaosMode, isNationalDraftSource } from '@/entities/game/gameMode';
-import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/types';
+import type { CSSProperties } from 'react';
+
+import { inferChaosSourceKind } from '@/entities/game/modes/chaosDraftPool';
+import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
+import { formationRowsForDisplay, type FormationId } from '@/entities/game/core/formations';
+import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
+import { isChaosMode, isNationalDraftSource } from '@/entities/game/modes/gameMode';
+import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/core/types';
 
 export interface TeamBoardProps {
   team: TeamState;
@@ -26,17 +28,20 @@ export function TeamBoard(props: TeamBoardProps) {
 
   return (
     <div
-      className={`team-board-card${props.disabled ? ' team-board-card--dim' : ''}`}
+      style={{
+        ...styles.card,
+        ...(props.disabled ? styles.cardDisabled : null),
+      }}
       aria-disabled={props.disabled}
     >
-      <div className="team-board-head">
-        <div>
-          <p className="team-board-name">{props.team.name}</p>
-          <p className="team-board-formation">{formationLabel(props.formation)}</p>
+      <div style={styles.header}>
+        <div style={styles.headerMain}>
+          <div style={styles.teamName}>{props.team.name}</div>
+          <div style={styles.small}>{formationLabel(props.formation)}</div>
         </div>
         {props.bestLineupHint ? (
-          <div className="team-board-hint-col">
-            <div className="team-board-hint-count">
+          <div style={styles.hintCol}>
+            <div style={styles.hintCounter}>
               Подсказки: {props.bestLineupHint.remaining} / {props.bestLineupHint.budget}
             </div>
             <button
@@ -45,11 +50,12 @@ export function TeamBoard(props: TeamBoardProps) {
                 props.bestLineupHint.remaining <= 0 || props.bestLineupHint.usedThisRound
               }
               onClick={props.bestLineupHint.onRequest}
-              className={`team-board-hint-btn${
-                props.bestLineupHint.remaining <= 0 || props.bestLineupHint.usedThisRound
-                  ? ' team-board-hint-btn--used'
-                  : ''
-              }`}
+              style={{
+                ...styles.hintBtn,
+                ...(props.bestLineupHint.remaining <= 0 || props.bestLineupHint.usedThisRound
+                  ? styles.hintBtnUsed
+                  : null),
+              }}
               title={
                 props.bestLineupHint.remaining <= 0
                   ? 'Подсказки закончились'
@@ -68,12 +74,12 @@ export function TeamBoard(props: TeamBoardProps) {
         ) : null}
       </div>
 
-      <div className="team-board-pitch" style={{ background: pitchBackground(props.team.colorScheme) }}>
+      <div style={{ ...styles.pitch, background: pitchBackground(props.team.colorScheme) }}>
         {rows.map((row, rowIdx) => (
           <div
             key={rowIdx}
-            className="team-board-row"
             style={{
+              ...styles.row,
               gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
             }}
           >
@@ -94,24 +100,27 @@ export function TeamBoard(props: TeamBoardProps) {
                   type="button"
                   disabled={props.disabled || isTaken}
                   onClick={() => props.onSelectSlot?.(cell.slotId)}
-                  className={`team-board-slot${isTaken ? ' team-board-slot--taken' : ''}${
-                    isSelected ? ' team-board-slot--selected' : ''
-                  }${props.disabled ? ' team-board-slot--disabled' : ''}`}
+                  style={{
+                    ...styles.slot,
+                    ...(isTaken ? styles.slotTaken : null),
+                    ...(isSelected ? styles.slotSelected : null),
+                    ...(props.disabled ? styles.slotDisabled : null),
+                  }}
                   title={
                     isTaken
                       ? `${pick?.playerName ?? '—'} (${sourceLabel || '—'})`
                       : 'Выбрать слот'
                   }
                 >
-                  <div className="team-board-slot-label">{cell.label}</div>
-                  <div className="team-board-slot-name">{pick?.playerName ?? '—'}</div>
-                  <div className="team-board-slot-meta">
-                    {sourceLabel ? <span>{sourceLabel}</span> : null}
+                  <div style={styles.slotLabel}>{cell.label}</div>
+                  <div style={styles.slotName}>{pick?.playerName ?? '—'}</div>
+                  <div style={styles.slotMeta}>
+                    {sourceLabel ? <span style={styles.slotMetaText}>{sourceLabel}</span> : null}
                     {flagUrl ? (
                       <img
                         src={flagUrl}
                         alt=""
-                        className="team-board-flag"
+                        style={styles.flagImg}
                         loading="lazy"
                       />
                     ) : null}
@@ -131,18 +140,108 @@ function formationLabel(id: FormationId): string {
 }
 
 function pitchBackground(scheme: ColorSchemeId): string {
-  const stripe =
-    'repeating-linear-gradient(90deg, transparent 0, transparent 56px, rgba(0,0,0,0.06) 56px, rgba(0,0,0,0.06) 112px)';
   switch (scheme) {
     case 'green':
-      return `${stripe}, linear-gradient(180deg, rgba(32,120,72,0.42) 0%, rgba(18,72,44,0.28) 100%), radial-gradient(circle at 50% 0%, rgba(255,255,255,0.08), transparent 55%)`;
+      return 'linear-gradient(180deg, rgba(38,145,80,0.25), rgba(38,145,80,0.10)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
     case 'red':
-      return `${stripe}, linear-gradient(180deg, rgba(168,42,52,0.38) 0%, rgba(90,22,28,0.25) 100%), radial-gradient(circle at 50% 0%, rgba(255,255,255,0.06), transparent 55%)`;
+      return 'linear-gradient(180deg, rgba(190,48,58,0.22), rgba(190,48,58,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
     case 'blue':
-      return `${stripe}, linear-gradient(180deg, rgba(42,88,190,0.38) 0%, rgba(22,48,110,0.26) 100%), radial-gradient(circle at 50% 0%, rgba(255,255,255,0.06), transparent 55%)`;
+      return 'linear-gradient(180deg, rgba(45,92,200,0.22), rgba(45,92,200,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
     case 'white':
-      return `${stripe}, linear-gradient(180deg, rgba(210,214,220,0.28) 0%, rgba(160,168,178,0.14) 100%), radial-gradient(circle at 50% 0%, rgba(255,255,255,0.12), transparent 60%)`;
+      return 'linear-gradient(180deg, rgba(245,245,248,0.18), rgba(245,245,248,0.08)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.08), transparent 60%)';
     default:
-      return `${stripe}, linear-gradient(180deg, rgba(32,120,72,0.42) 0%, rgba(18,72,44,0.28) 100%), radial-gradient(circle at 50% 0%, rgba(255,255,255,0.08), transparent 55%)`;
+      return 'linear-gradient(180deg, rgba(38,145,80,0.25), rgba(38,145,80,0.10)), radial-gradient(circle at 30% 0%, rgba(255,255,255,0.06), transparent 55%)';
   }
 }
+
+const styles: Record<string, CSSProperties> = {
+  card: {
+    height: '100%',
+    borderRadius: 16,
+    border: '1px solid rgba(255,255,255,0.12)',
+    background: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  cardDisabled: { opacity: 0.92 },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 12,
+    borderBottom: '1px solid rgba(255,255,255,0.10)',
+    background: 'rgba(0,0,0,0.14)',
+    flexWrap: 'wrap',
+  },
+  headerMain: { minWidth: 0, flex: '1 1 auto' },
+  teamName: { fontWeight: 800, letterSpacing: -0.2 },
+  hintCol: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 },
+  hintCounter: { fontSize: 11, fontWeight: 700, opacity: 0.85, whiteSpace: 'nowrap' },
+  hintBtn: {
+    flexShrink: 0,
+    padding: '7px 10px',
+    borderRadius: 10,
+    border: '1px solid rgba(212, 175, 55, 0.45)',
+    background: 'linear-gradient(180deg, rgba(212, 175, 55, 0.18) 0%, rgba(10, 15, 24, 0.5) 100%)',
+    color: '#f2e6b8',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+  },
+  hintBtnUsed: {
+    opacity: 0.55,
+    cursor: 'not-allowed',
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(0,0,0,0.2)',
+    color: 'inherit',
+    fontWeight: 650,
+  },
+  small: { opacity: 0.75, fontSize: 13 },
+  pitch: {
+    flex: '1 1 auto',
+    padding: 12,
+    display: 'grid',
+    gap: 12,
+  },
+  row: { display: 'grid', gap: 10 },
+  slot: {
+    borderRadius: 14,
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(0,0,0,0.22)',
+    padding: 10,
+    textAlign: 'center',
+    color: 'inherit',
+    cursor: 'pointer',
+    minHeight: 78,
+    display: 'grid',
+    alignContent: 'center',
+    gap: 3,
+  },
+  slotDisabled: { cursor: 'not-allowed' },
+  slotTaken: { border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(0,0,0,0.32)' },
+  slotSelected: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
+  slotLabel: { fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  slotName: { fontWeight: 750, fontSize: 14, lineHeight: 1.15 },
+  slotMeta: {
+    fontSize: 12,
+    opacity: 0.8,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    minHeight: 18,
+  },
+  slotMetaText: { lineHeight: 1.2 },
+  flagImg: {
+    width: 18,
+    height: 12,
+    objectFit: 'cover',
+    borderRadius: 2,
+    border: '1px solid rgba(0,0,0,0.4)',
+    backgroundColor: '#000',
+  },
+};
