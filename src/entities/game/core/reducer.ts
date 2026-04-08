@@ -20,7 +20,7 @@ import type {
 import { areTeamNamesPlaceholder, assignRandomTeamNames } from '../data/teamNames'
 import { drawRandom } from './random'
 import {
-  existingNameKeys,
+  existingPickedPlayerNames,
   pickRandomEuroClubPlayer,
   pickRandomRplPlayer,
   pickRandomTop15Player,
@@ -478,7 +478,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (existing.playerName) return state
 
       const position = existing.label
-      const usedKeys = existingNameKeys(state)
+      const usedNames = existingPickedPlayerNames(state)
       const chaosKind: DraftSourceKind | null = state.mode === 'chaos' ? (state.currentDraftSourceKind ?? null) : null
       const effectiveMode: GameMode =
         state.mode === 'chaos'
@@ -494,24 +494,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           ? pickRandomTop15Player({
               country: state.currentCountry,
               position,
-              usedNameKeys: usedKeys,
+              usedPlayerNames: usedNames,
             })
           : effectiveMode === 'nationalTop30'
             ? pickRandomTop30Player({
                 country: state.currentCountry,
                 position,
-                usedNameKeys: usedKeys,
+                usedPlayerNames: usedNames,
               })
             : effectiveMode === 'rpl'
               ? pickRandomRplPlayer({
                   club: state.currentCountry,
                   position,
-                  usedNameKeys: usedKeys,
+                  usedPlayerNames: usedNames,
                 })
               : pickRandomEuroClubPlayer({
                   club: state.currentCountry,
                   position,
-                  usedNameKeys: usedKeys,
+                  usedPlayerNames: usedNames,
                 })
 
       if (!picked) {
