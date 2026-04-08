@@ -162,6 +162,14 @@ export function ResultPage(props: ResultPageProps) {
           })}
         </div>
 
+        <p className="result-simulation-note">
+          <strong>Симуляция в чате.</strong> Нажмите «Скопировать всё» — в буфер обмена попадут итоги драфта и готовый
+          текст для модели. Затем «Перейти к симуляции», вставьте в поле чата скопированное (
+          <kbd className="result-kbd">Ctrl</kbd>
+          {' + '}
+          <kbd className="result-kbd">V</kbd> на ПК или «Вставить» на телефоне) и отправьте сообщение.
+        </p>
+
         <div className="result-actions">
           <button type="button" onClick={handleCopyAll} className="result-btn-secondary">
             {copyDone ? 'Скопировано' : 'Скопировать всё'}

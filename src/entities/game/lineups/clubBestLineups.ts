@@ -49,7 +49,6 @@ export const CLUB_LINEUP_TITLE_RU: Partial<Record<string, string>> = {
   'Spartak Moscow': 'Спартак Москва',
   'Tottenham Hotspur': 'Тоттенхэм Хотспур',
   Valencia: 'Валенсия',
-  'VfL Wolfsburg': 'Вольфсбург',
   'Werder Bremen': 'Вердер Бремен',
   'Zenit Saint Petersburg': 'Зенит Санкт-Петербург',
   'Leicester City': 'Лестер Сити',

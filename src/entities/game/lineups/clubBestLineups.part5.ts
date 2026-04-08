@@ -50,30 +50,6 @@ export const CLUB_LINEUPS_PART5: Record<string, ClubLineupData> = {
       L('FW', 'Рубен Паредес', 'Rubén Paredes'),
     ],
   },
-  'VfL Wolfsburg': {
-    start: [
-      L('GK', 'Диего Бенальо', 'Diego Benaglio'),
-      L('LB', 'Рикардо Родригес', 'Ricardo Rodríguez'),
-      L('CB', 'Налдо', 'Naldo'),
-      L('CB', 'Данте', 'Dante'),
-      L('RB', 'Кевин Мбабу', 'Kevin Mbabu'),
-      L('LM', 'Юлиан Дракслер', 'Julian Draxler'),
-      L('CM', 'Кевин Де Брюйне', 'Kevin De Bruyne'),
-      L('CM', 'Жозуэ', 'Josué'),
-      L('RM', 'Максимилиан Арнольд', 'Maximilian Arnold'),
-      L('ST', 'Эдин Джеко', 'Edin Džeko'),
-      L('ST', 'Графите', 'Grafite'),
-    ],
-    bench: [
-      L('GK', 'Мариус Мюллер', 'Marius Müller'),
-      L('DF', 'Марсель Шефер', 'Marcel Schäfer'),
-      L('DF', 'Филипп Ламы', 'Philipp Lahmy'),
-      L('MF', 'Ян Шлаудрафф', 'Jan Schlaudraff'),
-      L('MF', 'Ашкан Дежага', 'Ashkan Dejagah'),
-      L('FW', 'Марио Гомес', 'Mario Gomez'),
-      L('FW', 'Ивица Олич', 'Ivica Olić'),
-    ],
-  },
   'Werder Bremen': {
     start: [
       L('GK', 'Тим Визе', 'Tim Wiese'),

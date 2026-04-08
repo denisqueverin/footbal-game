@@ -1,4 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
+
+import { useMediaQuery } from '@/shared/lib/useMediaQuery';
 
 import { RulesModal } from '@/shared/ui/rules-modal';
 
@@ -71,7 +73,7 @@ function HintBudgetButton(props: HintBudgetButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
-      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
+      style={{ ...baseStyles.countBtn, ...(props.isActive ? baseStyles.countBtnActive : null) }}
       aria-pressed={props.isActive}
     >
       {props.budget}
@@ -90,7 +92,7 @@ function RandomHintBudgetButton(props: RandomHintBudgetButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
-      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
+      style={{ ...baseStyles.countBtn, ...(props.isActive ? baseStyles.countBtnActive : null) }}
       aria-pressed={props.isActive}
     >
       {props.budget}
@@ -104,7 +106,7 @@ function CountButton(props: CountButtonProps) {
       type="button"
       onClick={props.onPick}
       disabled={props.disabled}
-      style={{ ...styles.countBtn, ...(props.isActive ? styles.countBtnActive : null) }}
+      style={{ ...baseStyles.countBtn, ...(props.isActive ? baseStyles.countBtnActive : null) }}
       aria-pressed={props.isActive}
     >
       {props.count}
@@ -124,10 +126,10 @@ function SchemeButton(props: SchemeButtonProps) {
     <button
       type="button"
       onClick={() => props.onPick(props.schemeId)}
-      style={{ ...styles.schemeBtn, ...(props.isActive ? styles.schemeBtnActive : null) }}
+      style={{ ...baseStyles.schemeBtn, ...(props.isActive ? baseStyles.schemeBtnActive : null) }}
       aria-pressed={props.isActive}
     >
-      <span style={{ ...styles.schemeDot, background: schemeDotColor(props.schemeId) }} aria-hidden="true" />
+      <span style={{ ...baseStyles.schemeDot, background: schemeDotColor(props.schemeId) }} aria-hidden="true" />
       {props.label}
     </button>
   );
@@ -139,15 +141,17 @@ interface TeamBoxProps {
   colorScheme: ColorSchemeId;
   isFormationDisabled: boolean;
   hideFormationPicker?: boolean;
+  /** Узкая вёрстка: одна колонка сетки схем */
+  narrowLayout?: boolean;
   onPickScheme: (scheme: ColorSchemeId) => void;
   onPickFormation: (formation: FormationId) => void;
 }
 
 function TeamBox(props: TeamBoxProps) {
   return (
-    <div style={styles.teamBox}>
-      <div style={styles.teamNameDisplay}>{props.teamName}</div>
-      <div style={styles.schemeRowWithGap}>
+    <div style={baseStyles.teamBox}>
+      <div style={baseStyles.teamNameDisplay}>{props.teamName}</div>
+      <div style={baseStyles.schemeRowWithGap}>
         {SETUP_SCHEME_OPTIONS.map((option) => (
           <SchemeButton
             key={option.id}
@@ -159,9 +163,14 @@ function TeamBox(props: TeamBoxProps) {
         ))}
       </div>
       {props.hideFormationPicker ? (
-        <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
+        <div style={baseStyles.muted}>Схему выберет компьютер при старте игры</div>
       ) : (
-        <div style={styles.formationGrid}>
+        <div
+          style={{
+            ...baseStyles.formationGrid,
+            gridTemplateColumns: props.narrowLayout ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+          }}
+        >
           {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
             <button
               key={formationId}
@@ -169,14 +178,14 @@ function TeamBox(props: TeamBoxProps) {
               onClick={() => props.onPickFormation(formationId)}
               disabled={props.isFormationDisabled}
               style={{
-                ...styles.formationCard,
-                ...(props.activeFormation === formationId ? styles.formationCardActive : null),
-                ...(props.isFormationDisabled ? styles.formationCardDisabled : null),
+                ...baseStyles.formationCard,
+                ...(props.activeFormation === formationId ? baseStyles.formationCardActive : null),
+                ...(props.isFormationDisabled ? baseStyles.formationCardDisabled : null),
               }}
               title={formationLabelShort(formationId)}
             >
-              <div style={styles.formationCardTop}>
-                <div style={styles.formationName}>{formationLabelShort(formationId)}</div>
+              <div style={baseStyles.formationCardTop}>
+                <div style={baseStyles.formationName}>{formationLabelShort(formationId)}</div>
               </div>
               <FormationPreview formation={formationId} />
             </button>
@@ -190,6 +199,33 @@ function TeamBox(props: TeamBoxProps) {
 export function SetupPage(props: SetupPageProps) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [hintsSettingsOpen, setHintsSettingsOpen] = useState(true);
+  const isNarrow = useMediaQuery('(max-width: 640px)');
+  const styles = useMemo((): typeof baseStyles => {
+    return {
+      ...baseStyles,
+      page: {
+        ...baseStyles.page,
+        padding: isNarrow
+          ? 'max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))'
+          : 24,
+      },
+      card: {
+        ...baseStyles.card,
+        padding: isNarrow ? 14 : 20,
+      },
+      headerRow: {
+        ...baseStyles.headerRow,
+        flexDirection: isNarrow ? 'column' : 'row',
+        alignItems: isNarrow ? 'stretch' : 'flex-start',
+        gap: isNarrow ? 12 : 16,
+      },
+      h1: { ...baseStyles.h1, fontSize: isNarrow ? 24 : 28 },
+      teamFormations: {
+        ...baseStyles.teamFormations,
+        gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr',
+      },
+    };
+  }, [isNarrow]);
 
   const randomHintsSupported =
     props.mode === 'nationalTop15' ||
@@ -560,6 +596,7 @@ export function SetupPage(props: SetupPageProps) {
                   colorScheme={team.colorScheme}
                   isFormationDisabled={props.formationLocked || isCpuTeam}
                   hideFormationPicker={isCpuTeam}
+                  narrowLayout={isNarrow}
                   onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
                   onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
                 />
@@ -584,7 +621,7 @@ export function SetupPage(props: SetupPageProps) {
   );
 }
 
-const styles: Record<string, CSSProperties> = {
+const baseStyles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'grid',

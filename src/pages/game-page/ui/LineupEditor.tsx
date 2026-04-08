@@ -1,4 +1,6 @@
-import type { CSSProperties } from 'react';
+import { useMemo, type CSSProperties } from 'react';
+
+import { useMediaQuery } from '@/shared/lib/useMediaQuery';
 
 import { inferChaosSourceKind } from '@/entities/game/modes/chaosDraftPool';
 import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
@@ -14,6 +16,8 @@ export interface LineupEditorProps {
 
 export function LineupEditor(props: LineupEditorProps) {
   const { state } = props;
+  const isNarrow = useMediaQuery('(max-width: 640px)');
+  const styles = useMemo(() => getLineupEditorStyles(isNarrow), [isNarrow]);
 
   return (
     <div style={styles.wrap}>
@@ -96,9 +100,12 @@ export function LineupEditor(props: LineupEditorProps) {
   );
 }
 
-const styles: Record<string, CSSProperties> = {
+function getLineupEditorStyles(isNarrow: boolean): Record<string, CSSProperties> {
+  return {
   wrap: {
-    padding: '16px 18px 24px',
+    padding: isNarrow
+      ? '14px max(12px, env(safe-area-inset-right)) 20px max(12px, env(safe-area-inset-left))'
+      : '16px 18px 24px',
     flex: '1 1 auto',
     overflow: 'auto',
     borderBottom: '1px solid rgba(255,255,255,0.1)',
@@ -112,7 +119,7 @@ const styles: Record<string, CSSProperties> = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
     gap: 16,
     alignItems: 'start',
   },
@@ -124,7 +131,12 @@ const styles: Record<string, CSSProperties> = {
   },
   teamHeading: { margin: '0 0 10px', fontSize: 15, fontWeight: 750 },
   slots: { display: 'grid', gap: 8 },
-  row: { display: 'grid', gridTemplateColumns: '88px 1fr', gap: 10, alignItems: 'start' },
+  row: {
+    display: 'grid',
+    gridTemplateColumns: isNarrow ? 'minmax(0, 72px) 1fr' : '88px 1fr',
+    gap: isNarrow ? 8 : 10,
+    alignItems: 'start',
+  },
   fieldCol: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
   slotLabel: { fontSize: 12, opacity: 0.8, paddingTop: 8 },
   sourceHint: {
@@ -157,4 +169,5 @@ const styles: Record<string, CSSProperties> = {
     opacity: 0.45,
     cursor: 'not-allowed',
   },
-};
+  };
+}
