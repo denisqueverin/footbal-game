@@ -120,10 +120,21 @@ export function GamePage(props: GamePageProps) {
 
   const activeTeamState = state.teams[activeTeam];
   const activeSlotTaken = slotId ? Boolean(activeTeamState.picksBySlotId[slotId]?.playerName) : false;
+  const isCpuActiveTurn =
+    state.phase === 'drafting' &&
+    state.draftTimerPausedAt == null &&
+    Boolean(state.currentCountry) &&
+    state.teamControllers?.[activeTeam] === 'cpu';
 
   const canConfirm = useMemo(() => {
-    return Boolean(state.currentCountry) && Boolean(slotId) && !activeSlotTaken && playerName.trim().length > 0;
-  }, [activeSlotTaken, playerName, slotId, state.currentCountry]);
+    return (
+      !isCpuActiveTurn &&
+      Boolean(state.currentCountry) &&
+      Boolean(slotId) &&
+      !activeSlotTaken &&
+      playerName.trim().length > 0
+    );
+  }, [activeSlotTaken, isCpuActiveTurn, playerName, slotId, state.currentCountry]);
 
   const roundTurnSequence = useMemo(
     () =>
@@ -277,6 +288,7 @@ export function GamePage(props: GamePageProps) {
   const canUseRandomHint =
     !isEditingLineups &&
     state.phase === 'drafting' &&
+    state.teamControllers?.[activeTeam] !== 'cpu' &&
     state.randomPlayerHintsBudgetPerPlayer > 0 &&
     (state.mode === 'nationalTop15' ||
       state.mode === 'nationalTop30' ||
@@ -295,17 +307,16 @@ export function GamePage(props: GamePageProps) {
 
   // Ход компьютера: выбираем слот -> 3с лоадер -> подсветка -> подтверждение -> передача хода.
   useEffect(() => {
-    const cpuTeamId: TeamId = 'team2';
     const isEditingLineups = state.draftTimerPausedAt != null;
     const isCpuTurn =
       state.phase === 'drafting' &&
-      state.gameKind === 'vsCpu' &&
       !isEditingLineups &&
-      state.turn === cpuTeamId &&
+      state.teamControllers?.[state.turn] === 'cpu' &&
       Boolean(state.currentCountry);
 
     if (!isCpuTurn) return;
 
+    const cpuTeamId: TeamId = state.turn;
     const lockKey = `${state.roundIndex}:${state.currentCountry ?? ''}:${state.turn}:${Object.values(
       state.teams[cpuTeamId].picksBySlotId,
     )
@@ -644,8 +655,9 @@ export function GamePage(props: GamePageProps) {
                 value={playerName}
                 onChange={handlePlayerNameChange}
                 onKeyDown={handlePlayerNameKeyDown}
-                placeholder="Имя футболиста (свободный ввод)"
+                placeholder={isCpuActiveTurn ? 'Ход компьютера…' : 'Имя футболиста (свободный ввод)'}
                 style={styles.input}
+                disabled={isCpuActiveTurn}
               />
               <div style={styles.slotPreview}>
                 Слот: <b>{slotId ?? 'не выбран'}</b>
@@ -707,9 +719,8 @@ export function GamePage(props: GamePageProps) {
                   onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
                   disabled={activeTeam !== teamId}
                   pendingPick={
-                    state.gameKind === 'vsCpu' &&
-                    state.turn === 'team2' &&
-                    teamId === 'team2' &&
+                    state.teamControllers?.[teamId] === 'cpu' &&
+                    state.turn === teamId &&
                     cpuPending != null
                       ? { slotId: cpuPending.slotId }
                       : null

@@ -14,6 +14,7 @@ import type {
   RandomPlayerHintsBudget,
   SlotPick,
   TeamCount,
+  TeamController,
   TeamId,
   TeamState,
 } from './types'
@@ -41,6 +42,7 @@ export type GameAction =
   | { type: 'setup/setGameKind'; gameKind: GameKind }
   | { type: 'setup/setCpuDifficulty'; difficulty: CpuDifficulty }
   | { type: 'setup/setTeamCount'; count: TeamCount }
+  | { type: 'setup/setTeamController'; team: TeamId; controller: TeamController }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
   | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
   | { type: 'setup/setHintsBudget'; budget: HintsBudget }
@@ -101,6 +103,10 @@ function createRandomPlayerHintsRemaining(budget: number): Record<TeamId, number
 
 function createHintUsedThisRound(): Record<TeamId, boolean> {
   return { team1: false, team2: false, team3: false, team4: false }
+}
+
+function defaultTeamControllers(): Record<TeamId, TeamController> {
+  return { team1: 'human', team2: 'human', team3: 'human', team4: 'human' }
 }
 
 function makeEmptyTeam(
@@ -184,6 +190,7 @@ export function createInitialGameState(): GameState {
     formationLocked: false,
     teamOrder: ['team1', 'team2'],
     mode: 'nationalTop15',
+    teamControllers: defaultTeamControllers(),
     draftTurnOrderBase: 0,
 
     bestLineupIncludeBench: true,
@@ -234,9 +241,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // В режиме vs CPU всегда 2 команды (человек + компьютер).
       if (action.gameKind === 'vsCpu') {
         const order: TeamId[] = ['team1', 'team2']
-        return { ...state, gameKind: 'vsCpu', teamOrder: order, turn: order[0] }
+        return {
+          ...state,
+          gameKind: 'vsCpu',
+          teamOrder: order,
+          turn: order[0],
+          teamControllers: { ...state.teamControllers, team1: 'human', team2: 'cpu' },
+        }
       }
-      return { ...state, gameKind: 'multi' }
+      // Возврат в мультиплеер: оставляем выбранные контроллеры, но по умолчанию делаем team2 человеком,
+      // чтобы не тянуть "vsCpu" настройку неожиданно.
+      return {
+        ...state,
+        gameKind: 'multi',
+        teamControllers: { ...state.teamControllers, team2: 'human' },
+      }
     }
     case 'setup/setCpuDifficulty': {
       if (state.phase !== 'setup') return state
@@ -248,6 +267,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.gameKind === 'vsCpu') return state
       const nextOrder = teamOrderForCount(action.count)
       return { ...state, teamOrder: nextOrder, turn: nextOrder[0] ?? 'team1' }
+    }
+    case 'setup/setTeamController': {
+      if (state.phase !== 'setup') return state
+      // В режиме vs CPU контроллеры фиксированы.
+      if (state.gameKind === 'vsCpu') return state
+      // Первая команда всегда "человек" (чтобы была хоть одна управляемая вручную команда в UI).
+      if (action.team === 'team1' && action.controller !== 'human') return state
+      return {
+        ...state,
+        teamControllers: {
+          ...state.teamControllers,
+          [action.team]: action.controller,
+        },
+      }
     }
     case 'setup/setTeamFormation': {
       if (state.formationLocked) return state
@@ -290,8 +323,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return assignRandomTeamNames(state)
     }
     case 'setup/start': {
-      const cpuTeamId: TeamId = 'team2'
-      const shouldUseCpu = state.gameKind === 'vsCpu'
+      const isCpuTeam = (teamId: TeamId): boolean => {
+        return state.gameKind === 'vsCpu'
+          ? teamId === 'team2'
+          : state.teamControllers[teamId] === 'cpu'
+      }
 
       const chaosPicks =
         state.mode === 'chaos' ? pickRandomUnique(buildChaosDraftPool(), state.maxRounds) : null
@@ -313,9 +349,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
 
       const n = order.length
-      // В режиме vs CPU компьютер всегда ходит вторым в раунде 1:
-      // roundTurnOrder(..., roundIndex=1) при base=0 даёт порядок [team1, team2].
-      const draftTurnOrderBase = shouldUseCpu ? 0 : n > 0 ? Math.floor(Math.random() * n) : 0
+      // В vsCPU оставляем прежнее поведение (CPU ходит вторым в раунде 1),
+      // в остальных случаях — случайный стартовый сдвиг.
+      const draftTurnOrderBase = state.gameKind === 'vsCpu' ? 0 : n > 0 ? Math.floor(Math.random() * n) : 0
       const hintBudget = state.hintsBudgetPerPlayer
       const randomPlayerHintBudget = state.randomPlayerHintsBudgetPerPlayer
 
@@ -324,7 +360,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const prev = state.teams[teamId]
         // Компьютер выбирает схему случайно перед жеребьёвкой.
         const nextFormation =
-          shouldUseCpu && teamId === cpuTeamId
+          isCpuTeam(teamId)
             ? (Object.keys(FORMATIONS)[Math.floor(Math.random() * Object.keys(FORMATIONS).length)] as FormationId)
             : prev.formation
         // Имя команды назначается после сплеша жеребьёвки (drawReveal/assignTeamNames),

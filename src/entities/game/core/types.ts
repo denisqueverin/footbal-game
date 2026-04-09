@@ -18,6 +18,8 @@ export type CpuDifficulty = 'beginner' | 'normal' | 'hard'
 
 export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'chaos'
 
+export type TeamController = 'human' | 'cpu'
+
 /** Тип источника раунда (для режима «Хаос» и подсказок). */
 export type DraftSourceKind = 'national' | 'club' | 'rplClub'
 
@@ -49,6 +51,9 @@ export type GameState = {
   formationLocked: boolean
   teamOrder: TeamId[]
   mode: GameMode
+
+  /** Кто управляет каждой командой: человек или компьютер. */
+  teamControllers: Record<TeamId, TeamController>
 
   /** Показывать в подсказке «Лучший состав» скамейку запасных или только стартовых 11. */
   bestLineupIncludeBench: boolean

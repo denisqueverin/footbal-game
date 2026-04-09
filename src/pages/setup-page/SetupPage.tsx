@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 
 import { useMediaQuery } from '@/shared/lib/useMediaQuery';
 
@@ -13,6 +13,7 @@ import type {
   HintsBudget,
   RandomPlayerHintsBudget,
   TeamCount,
+  TeamController,
   TeamId,
   TeamState,
 } from '@/entities/game/core/types';
@@ -40,6 +41,8 @@ export interface SetupPageProps {
   mode: GameMode;
   gameKind: GameKind;
   cpuDifficulty: CpuDifficulty;
+  teamControllers: Record<TeamId, TeamController>;
+  onSetTeamController: (team: TeamId, controller: TeamController) => void;
   onSetTeamFormation: (team: TeamId, formation: FormationId) => void;
   onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void;
   onSetTeamCount: (count: TeamCount) => void;
@@ -238,6 +241,19 @@ export function SetupPage(props: SetupPageProps) {
 
   const hintsEnabled = props.hintsBudget > 0 || props.randomPlayerHintsBudget > 0;
 
+  const isCpuTeam = useCallback(
+    (teamId: TeamId): boolean => {
+      return props.gameKind === 'vsCpu'
+        ? teamId === 'team2'
+        : props.teamControllers[teamId] === 'cpu';
+    },
+    [props.gameKind, props.teamControllers],
+  );
+
+  const anyCpuActive = useMemo(() => {
+    return props.teamOrder.some((id) => isCpuTeam(id));
+  }, [isCpuTeam, props.teamOrder]);
+
   const handleHintsWith = () => {
     if (!hintsEnabled) {
       props.onSetHintsBudget(1);
@@ -425,7 +441,59 @@ export function SetupPage(props: SetupPageProps) {
           </div>
         ) : null}
 
-        {props.gameKind === 'vsCpu' ? (
+        {props.gameKind === 'multi' ? (
+          <div style={styles.section}>
+            <div style={styles.labelRow}>
+              <div style={styles.label}>Кто играет</div>
+              <div style={styles.muted}>Можно смешивать людей и компьютеры (2–4 команды)</div>
+            </div>
+            <div style={styles.teamFormations}>
+              {props.teamOrder.map((teamId, index) => {
+                const controller = props.teamControllers[teamId] ?? 'human';
+                const cpuDisabled = teamId === 'team1';
+                return (
+                  <div key={teamId} style={styles.teamBox}>
+                    <div style={styles.teamNameDisplay}>Команда {index + 1}</div>
+                    <div style={styles.modeRow}>
+                      <button
+                        type="button"
+                        onClick={() => props.onSetTeamController(teamId, 'human')}
+                        style={{
+                          ...styles.modeBtn,
+                          ...(controller === 'human' ? styles.modeBtnActive : null),
+                        }}
+                        aria-pressed={controller === 'human'}
+                      >
+                        Игрок
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => props.onSetTeamController(teamId, 'cpu')}
+                        disabled={cpuDisabled}
+                        style={{
+                          ...styles.modeBtn,
+                          ...(controller === 'cpu' ? styles.modeBtnActive : null),
+                          ...(cpuDisabled ? { opacity: 0.55, cursor: 'not-allowed' } : null),
+                        }}
+                        aria-pressed={controller === 'cpu'}
+                        title={cpuDisabled ? 'Команда 1 всегда игрок' : 'Компьютер будет ходить автоматически'}
+                      >
+                        Компьютер
+                      </button>
+                    </div>
+                    {controller === 'cpu' ? (
+                      <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
+                    ) : (
+                      <div style={styles.muted}>Ходы этой команды делаете вы</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {anyCpuActive ? (
           <div style={styles.section}>
             <div style={styles.labelRow}>
               <div style={styles.label}>Сложность компьютера</div>
@@ -585,8 +653,8 @@ export function SetupPage(props: SetupPageProps) {
           <div style={styles.teamFormations}>
             {props.teamOrder.map((teamId) => {
               const team = props.teams[teamId];
-              const isCpuTeam = props.gameKind === 'vsCpu' && teamId === 'team2';
-              const displayTeamName = isCpuTeam ? 'Нейро команда 2' : team.name;
+              const cpu = isCpuTeam(teamId);
+              const displayTeamName = cpu ? `Нейро ${team.name}` : team.name;
 
               return (
                 <TeamBox
@@ -594,8 +662,8 @@ export function SetupPage(props: SetupPageProps) {
                   teamName={displayTeamName}
                   activeFormation={team.formation}
                   colorScheme={team.colorScheme}
-                  isFormationDisabled={props.formationLocked || isCpuTeam}
-                  hideFormationPicker={isCpuTeam}
+                  isFormationDisabled={props.formationLocked || cpu}
+                  hideFormationPicker={cpu}
                   narrowLayout={isNarrow}
                   onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
                   onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
