@@ -115,7 +115,8 @@ export function assignRandomTeamNames(state: GameState): GameState {
   const nextTeams = { ...state.teams }
   TEAM_IDS.forEach((id, i) => {
     const baseName = names[i]!
-    const name = state.gameKind === 'vsCpu' && id === 'team2' ? `Нейро ${baseName}` : baseName
+    const isCpu = state.teamControllers?.[id] === 'cpu' || (state.gameKind === 'vsCpu' && id === 'team2')
+    const name = isCpu ? `Нейро ${baseName}` : baseName
     nextTeams[id] = { ...nextTeams[id], name }
   })
   return { ...state, teams: nextTeams }

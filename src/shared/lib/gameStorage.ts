@@ -8,6 +8,7 @@ import type {
   GameState,
   HintsBudget,
   RandomPlayerHintsBudget,
+  TeamController,
   TeamId,
 } from '@/entities/game/core/types';
 
@@ -76,6 +77,7 @@ function normalizeGameState(state: GameState): GameState {
     currentDraftSourceKind?: DraftSourceKind | null;
     gameKind?: unknown;
     cpuDifficulty?: unknown;
+    teamControllers?: unknown;
   };
 
   const budget: HintsBudget = isHintsBudget(legacy.hintsBudgetPerPlayer ?? 0)
@@ -110,6 +112,19 @@ function normalizeGameState(state: GameState): GameState {
   const gameKind = normalizeGameKind(legacy.gameKind ?? state.gameKind)
   const cpuDifficulty = normalizeCpuDifficulty(legacy.cpuDifficulty ?? state.cpuDifficulty)
 
+  const normalizeController = (v: unknown): TeamController => (v === 'cpu' ? 'cpu' : 'human')
+  const teamControllers: Record<TeamId, TeamController> = {
+    team1: normalizeController((legacy.teamControllers as any)?.team1 ?? (state as any).teamControllers?.team1),
+    team2: normalizeController((legacy.teamControllers as any)?.team2 ?? (state as any).teamControllers?.team2),
+    team3: normalizeController((legacy.teamControllers as any)?.team3 ?? (state as any).teamControllers?.team3),
+    team4: normalizeController((legacy.teamControllers as any)?.team4 ?? (state as any).teamControllers?.team4),
+  }
+  // Для старых сохранений vsCpu — гарантируем, что team2 это CPU.
+  if (gameKind === 'vsCpu') {
+    teamControllers.team1 = 'human'
+    teamControllers.team2 = 'cpu'
+  }
+
   const randomBudget: RandomPlayerHintsBudget = isRandomPlayerHintsBudget(
     legacy.randomPlayerHintsBudgetPerPlayer ?? 0,
   )
@@ -124,6 +139,7 @@ function normalizeGameState(state: GameState): GameState {
     mode,
     gameKind,
     cpuDifficulty,
+    teamControllers,
     bestLineupIncludeBench,
     hintsBudgetPerPlayer: budget,
     hintsRemaining,

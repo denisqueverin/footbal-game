@@ -10,6 +10,7 @@ import type {
   HintsBudget,
   RandomPlayerHintsBudget,
   TeamCount,
+  TeamController,
   TeamId,
 } from '@/entities/game/core/types';
 
@@ -50,6 +51,10 @@ export function App() {
 
   const handleSetupSetTeamCount = useCallback((count: TeamCount) => {
     dispatch({ type: 'setup/setTeamCount', count });
+  }, []);
+
+  const handleSetupSetTeamController = useCallback((team: TeamId, controller: TeamController) => {
+    dispatch({ type: 'setup/setTeamController', team, controller });
   }, []);
 
   const handleSetupSetTeamFormation = useCallback((team: TeamId, formation: FormationId) => {
@@ -132,6 +137,8 @@ export function App() {
         mode={state.mode}
         gameKind={state.gameKind}
         cpuDifficulty={state.cpuDifficulty}
+        teamControllers={state.teamControllers}
+        onSetTeamController={handleSetupSetTeamController}
         onSetTeamFormation={handleSetupSetTeamFormation}
         onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
