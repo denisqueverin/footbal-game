@@ -33,13 +33,23 @@ import {
 } from '../data/topCountries'
 import { roundTurnOrder } from './turnOrder'
 import { withBestLineupBenchRule } from './bestLineupBenchRule'
+import {
+  buildInitialCoachDraftState,
+  coachDraftVictimAtStep,
+} from './coachDraftPhase'
 
 export type GameAction =
   | { type: 'setup/start' }
+  | { type: 'coachDraft/toggleEliminate'; coachId: string }
+  | { type: 'coachDraft/confirmEliminate' }
+  /** Одним шагом снять тренера с колонки жертвы (клик по карточке). */
+  | { type: 'coachDraft/eliminateCoach'; coachId: string }
+  | { type: 'coachDraft/selectFinalCoach'; coachId: string }
+  | { type: 'formationPick/selectFormation'; formation: FormationId }
   | { type: 'drawReveal/assignTeamNames' }
   | { type: 'drawReveal/continue' }
   | { type: 'setup/setMode'; mode: GameMode }
-  | { type: 'setup/setCpuDifficulty'; difficulty: CpuDifficulty }
+  | { type: 'setup/setCpuDifficultyForTeam'; team: TeamId; difficulty: CpuDifficulty }
   | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamController'; team: TeamId; controller: TeamController }
   | { type: 'setup/setTeamFormation'; team: TeamId; formation: FormationId }
@@ -159,8 +169,15 @@ function makeEmptyTeam(
     name,
     formation,
     colorScheme,
+    coach: null,
     picksBySlotId,
   }
+}
+
+/** Новая схема поля до драфта игроков: слоты сбрасываем, тренера сохраняем. */
+function rebuildTeamWithFormation(prev: TeamState, formation: FormationId): TeamState {
+  const base = makeEmptyTeam(prev.id, formation, prev.name, prev.colorScheme)
+  return { ...base, coach: prev.coach }
 }
 
 function isTeamFull(team: TeamState): boolean {
@@ -208,14 +225,41 @@ function drawNextCountry(state: GameState): GameState {
   }
 }
 
+/** После выбора схемы или жеребьёвки перед драфтом игроков (старые сохранения). */
+function beginDraftingPhase(state: GameState): GameState {
+  const base: GameState = { ...state, phase: 'drafting' }
+  const drawn = drawNextCountry(base)
+  if (!drawn.currentCountry) {
+    return { ...drawn, phase: 'finished' }
+  }
+  const first = roundTurnOrder(drawn.teamOrder, drawn.draftTurnOrderBase, drawn.roundIndex)[0]
+  const startedAt = drawn.draftTimerStartedAt ?? Date.now()
+  return {
+    ...drawn,
+    turn: first ?? drawn.turn,
+    draftTimerStartedAt: startedAt,
+    draftTimerPausedAt: null,
+    draftTimerPausedAccumMs: drawn.draftTimerPausedAccumMs,
+    draftTurnAccumMs: emptyDraftTurnAccumMs(),
+    draftTurnSliceStartedAt: startedAt,
+  }
+}
+
 export function createInitialGameState(): GameState {
   const base: GameState = {
     phase: 'setup',
     gameKind: 'multi',
-    cpuDifficulty: 'normal',
+    cpuDifficultyByTeam: {
+      team1: 'normal',
+      team2: 'normal',
+      team3: 'normal',
+      team4: 'normal',
+    },
     formationLocked: false,
     teamOrder: ['team1', 'team2'],
     mode: 'nationalTop15',
+    coachDraft: null,
+    formationPick: null,
     teamControllers: defaultTeamControllers(),
     draftTurnOrderBase: 0,
 
@@ -265,9 +309,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase !== 'setup') return state
       return { ...state, mode: action.mode }
     }
-    case 'setup/setCpuDifficulty': {
+    case 'setup/setCpuDifficultyForTeam': {
       if (state.phase !== 'setup') return state
-      return withBestLineupBenchRule({ ...state, cpuDifficulty: action.difficulty })
+      return withBestLineupBenchRule({
+        ...state,
+        cpuDifficultyByTeam: {
+          ...state.cpuDifficultyByTeam,
+          [action.team]: action.difficulty,
+        },
+      })
     }
     case 'setup/setTeamCount': {
       if (state.phase !== 'setup') return state
@@ -355,11 +405,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'setup/start': {
       const setupState = withBestLineupBenchRule(state)
-      const isCpuTeam = (teamId: TeamId): boolean => {
-        return setupState.gameKind === 'vsCpu'
-          ? teamId === 'team2'
-          : setupState.teamControllers[teamId] === 'cpu'
-      }
 
       const chaosPicks =
         setupState.mode === 'chaos' ? pickRandomUnique(buildChaosDraftPool(), setupState.maxRounds) : null
@@ -387,22 +432,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const hintBudget = setupState.hintsBudgetPerPlayer
       const randomPlayerHintBudget = setupState.randomPlayerHintsBudgetPerPlayer
 
+      const placeholderFormation: FormationId = '1-4-3-3'
       const nextTeams: GameState['teams'] = { ...setupState.teams }
       for (const teamId of order) {
         const prev = setupState.teams[teamId]
-        // Компьютер выбирает схему случайно перед жеребьёвкой.
-        const nextFormation =
-          isCpuTeam(teamId)
-            ? (Object.keys(FORMATIONS)[Math.floor(Math.random() * Object.keys(FORMATIONS).length)] as FormationId)
-            : prev.formation
-        // Имя команды назначается после сплеша жеребьёвки (drawReveal/assignTeamNames),
-        // поэтому здесь оставляем плейсхолдеры.
-        nextTeams[teamId] = makeEmptyTeam(teamId, nextFormation, prev.name, prev.colorScheme)
+        // Схему выбирают после драфта тренеров; до этого — общий плейсхолдер.
+        nextTeams[teamId] = makeEmptyTeam(teamId, placeholderFormation, prev.name, prev.colorScheme)
       }
-      return {
+      const common = {
         ...setupState,
-        phase: 'drawReveal',
-        formationLocked: true,
+        formationLocked: false,
         draftTurnOrderBase,
         hintsRemaining: createHintsRemaining(hintBudget),
         hintUsedThisRound: createHintUsedThisRound(),
@@ -432,25 +471,187 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         draftTurnAccumMs: emptyDraftTurnAccumMs(),
         draftTurnSliceStartedAt: null,
       }
+      return {
+        ...common,
+        phase: 'drawReveal',
+        coachDraft: null,
+        formationPick: null,
+      }
+    }
+    case 'formationPick/selectFormation': {
+      if (state.phase !== 'formationPick' || !state.formationPick) return state
+      const order = state.teamOrder
+      const idx = state.formationPick.activeIndex
+      const teamId = order[idx]
+      if (!teamId) return state
+      const prev = state.teams[teamId]
+      const nextTeam = rebuildTeamWithFormation(prev, action.formation)
+      const nextTeams = { ...state.teams, [teamId]: nextTeam }
+      const nextIdx = idx + 1
+      if (nextIdx >= order.length) {
+        return beginDraftingPhase({
+          ...state,
+          formationPick: null,
+          formationLocked: true,
+          teams: nextTeams,
+          turn: order[0] ?? 'team1',
+        })
+      }
+      return {
+        ...state,
+        teams: nextTeams,
+        formationPick: { activeIndex: nextIdx },
+      }
+    }
+    case 'coachDraft/toggleEliminate': {
+      if (state.phase !== 'coachDraft' || !state.coachDraft) return state
+      const cd = state.coachDraft
+      if (cd.step !== 'eliminate') return state
+      const order = state.teamOrder
+      const victim = coachDraftVictimAtStep(order, cd.eliminationStepIndex)
+      const victimPool = cd.pools[victim]
+      if (!victimPool.some((c) => c.id === action.coachId)) return state
+      const pending = cd.pendingEliminateIds
+      const has = pending.includes(action.coachId)
+      let nextPending: string[]
+      if (has) {
+        nextPending = pending.filter((id) => id !== action.coachId)
+      } else {
+        nextPending = [action.coachId]
+      }
+      return {
+        ...state,
+        coachDraft: { ...cd, pendingEliminateIds: nextPending },
+      }
+    }
+    case 'coachDraft/confirmEliminate': {
+      if (state.phase !== 'coachDraft' || !state.coachDraft) return state
+      const cd = state.coachDraft
+      if (cd.step !== 'eliminate') return state
+      if (cd.pendingEliminateIds.length !== 1) return state
+      const order = state.teamOrder
+      const victim = coachDraftVictimAtStep(order, cd.eliminationStepIndex)
+      const victimPool = cd.pools[victim]
+      const removeId = cd.pendingEliminateIds[0]!
+      if (!victimPool.some((c) => c.id === removeId)) return state
+      const nextPool = victimPool.filter((c) => c.id !== removeId)
+      if (nextPool.length < 2) return state
+      const nextPools = { ...cd.pools, [victim]: nextPool }
+      const nextStep = cd.eliminationStepIndex + 1
+      const totalSteps = 3 * order.length
+      if (nextStep >= totalSteps) {
+        return {
+          ...state,
+          coachDraft: {
+            ...cd,
+            step: 'pick',
+            pools: nextPools,
+            pendingEliminateIds: [],
+            activeIndex: 0,
+            eliminationStepIndex: nextStep,
+          },
+        }
+      }
+      return {
+        ...state,
+        coachDraft: {
+          ...cd,
+          pools: nextPools,
+          pendingEliminateIds: [],
+          eliminationStepIndex: nextStep,
+        },
+      }
+    }
+    case 'coachDraft/eliminateCoach': {
+      if (state.phase !== 'coachDraft' || !state.coachDraft) return state
+      const cd = state.coachDraft
+      if (cd.step !== 'eliminate') return state
+      const order = state.teamOrder
+      const victim = coachDraftVictimAtStep(order, cd.eliminationStepIndex)
+      const victimPool = cd.pools[victim]
+      const removeId = action.coachId
+      if (!victimPool.some((c) => c.id === removeId)) return state
+      const nextPool = victimPool.filter((c) => c.id !== removeId)
+      if (nextPool.length < 2) return state
+      const nextPools = { ...cd.pools, [victim]: nextPool }
+      const nextStep = cd.eliminationStepIndex + 1
+      const totalSteps = 3 * order.length
+      if (nextStep >= totalSteps) {
+        return {
+          ...state,
+          coachDraft: {
+            ...cd,
+            step: 'pick',
+            pools: nextPools,
+            pendingEliminateIds: [],
+            activeIndex: 0,
+            eliminationStepIndex: nextStep,
+          },
+        }
+      }
+      return {
+        ...state,
+        coachDraft: {
+          ...cd,
+          pools: nextPools,
+          pendingEliminateIds: [],
+          eliminationStepIndex: nextStep,
+        },
+      }
+    }
+    case 'coachDraft/selectFinalCoach': {
+      if (state.phase !== 'coachDraft' || !state.coachDraft) return state
+      const cd = state.coachDraft
+      if (cd.step !== 'pick') return state
+      const order = state.teamOrder
+      const teamId = order[cd.activeIndex]
+      if (!teamId) return state
+      const pool = cd.pools[teamId]
+      const coach = pool.find((c) => c.id === action.coachId)
+      if (!coach) return state
+      const nextTeams = {
+        ...state.teams,
+        [teamId]: { ...state.teams[teamId], coach },
+      }
+      const nextActive = cd.activeIndex + 1
+      if (nextActive >= order.length) {
+        return {
+          ...state,
+          phase: 'formationPick',
+          coachDraft: null,
+          formationPick: { activeIndex: 0 },
+          teams: nextTeams,
+          turn: order[0] ?? 'team1',
+        }
+      }
+      return {
+        ...state,
+        teams: nextTeams,
+        coachDraft: {
+          ...cd,
+          pools: { ...cd.pools, [teamId]: [] },
+          activeIndex: nextActive,
+          eliminationStepIndex: 0,
+          pendingEliminateIds: [],
+        },
+      }
     }
     case 'drawReveal/continue': {
       if (state.phase !== 'drawReveal') return state
-      const base: GameState = { ...state, phase: 'drafting' }
-      const drawn = drawNextCountry(base)
-      if (!drawn.currentCountry) {
-        return { ...drawn, phase: 'finished' }
+      const order = state.teamOrder
+      const allHaveCoaches = order.every((id) => state.teams[id].coach != null)
+      if (!allHaveCoaches) {
+        return {
+          ...state,
+          phase: 'coachDraft',
+          coachDraft: buildInitialCoachDraftState(order, state.mode, {
+            gameKind: state.gameKind,
+            cpuDifficultyByTeam: state.cpuDifficultyByTeam,
+            teamControllers: state.teamControllers,
+          }),
+        }
       }
-      const first = roundTurnOrder(drawn.teamOrder, drawn.draftTurnOrderBase, drawn.roundIndex)[0]
-      const startedAt = drawn.draftTimerStartedAt ?? Date.now()
-      return {
-        ...drawn,
-        turn: first ?? drawn.turn,
-        draftTimerStartedAt: startedAt,
-        draftTimerPausedAt: null,
-        draftTimerPausedAccumMs: drawn.draftTimerPausedAccumMs,
-        draftTurnAccumMs: emptyDraftTurnAccumMs(),
-        draftTurnSliceStartedAt: startedAt,
-      }
+      return beginDraftingPhase(state)
     }
     case 'draft/setDraftTimerPaused': {
       if (state.phase !== 'drafting') return state

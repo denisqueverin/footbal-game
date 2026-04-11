@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 
 import { FORMATIONS, type FormationId } from '@/entities/game/core/formations';
-import type { ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
+import type { CoachAssignment, ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
+import { COACH_SIMULATION_PROMPT_EXTRA } from '@/entities/game/data/coaches';
 
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 import { schemeAccent, schemeDotColor } from '@/shared/lib/schemeAccent';
@@ -9,6 +10,7 @@ import { schemeAccent, schemeDotColor } from '@/shared/lib/schemeAccent';
 import { SETUP_MODE_OPTIONS, SETUP_SCHEME_OPTIONS } from '@/pages/setup-page/setup-page.constants';
 import { formationLabelShort } from '@/pages/setup-page/setup-page.utils';
 import { formatDraftDuration } from '@/pages/game-page/game-page.utils';
+import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 
 export interface ResultPageProps {
   state: GameState;
@@ -43,6 +45,9 @@ function buildResultExportText(state: GameState): string {
     lines.push(`— ${team.name} —`);
     const turnMs = state.draftTurnAccumMs[teamId] ?? 0;
     lines.push(`Время на ходах: ${formatDraftDuration(turnMs)}`);
+    if (team.coach) {
+      lines.push(`Тренер: ${team.coach.name} (${team.coach.countryRu}, ${team.coach.stars}★)`);
+    }
     lines.push(`Схема: ${formationShort}`);
     const rows = FORMATIONS[team.formation].rows;
     for (const row of rows) {
@@ -57,6 +62,8 @@ function buildResultExportText(state: GameState): string {
   }
 
   lines.push(SIMULATION_PROMPT);
+  lines.push('');
+  lines.push(COACH_SIMULATION_PROMPT_EXTRA);
   return lines.join('\n');
 }
 
@@ -66,6 +73,7 @@ interface TeamSummaryProps {
   formationId: FormationId;
   picks: Record<string, { playerName: string | null; country: string | null; label: string }>;
   turnTimeMs: number;
+  coach: CoachAssignment | null;
 }
 
 function TeamSummary(props: TeamSummaryProps) {
@@ -82,6 +90,24 @@ function TeamSummary(props: TeamSummaryProps) {
     >
       <div className="result-team-title">{props.title}</div>
       <div className="result-team-time">Время на ходах: {formatDraftDuration(props.turnTimeMs)}</div>
+      {props.coach ? (
+        <>
+          <div className="result-team-coach">
+            {getCountryFlagUrlRu(props.coach.countryRu) ? (
+              <img
+                src={getCountryFlagUrlRu(props.coach.countryRu)!}
+                alt=""
+                className="result-team-coach-flag"
+                width={32}
+                height={20}
+              />
+            ) : null}
+            <span>
+              Тренер: <strong>{props.coach.name}</strong> ({props.coach.countryRu}, {props.coach.stars}★)
+            </span>
+          </div>
+        </>
+      ) : null}
       <div className="result-color-row" aria-label={`Цвет команды: ${schemeLabel(props.colorScheme)}`}>
         <span
           className="result-color-dot"
@@ -144,7 +170,9 @@ export function ResultPage(props: ResultPageProps) {
           Финальный свисток
         </div>
         <h1 className="result-title">Игра завершена</h1>
-        <p className="result-sub">Итоги по командам и выбранным схемам. Ниже — суммарное время, пока у команды был ход.</p>
+        <p className="result-sub">
+          Итоги по командам и выбранным схемам. Ниже — суммарное время на ходах и тренеры команд.
+        </p>
 
         <div
           className="result-grid"
@@ -163,6 +191,7 @@ export function ResultPage(props: ResultPageProps) {
                 formationId={team.formation}
                 picks={team.picksBySlotId}
                 turnTimeMs={state.draftTurnAccumMs[teamId] ?? 0}
+                coach={state.teams[teamId].coach}
               />
             );
           })}
@@ -173,7 +202,8 @@ export function ResultPage(props: ResultPageProps) {
           текст для модели. Затем «Перейти к симуляции», вставьте в поле чата скопированное (
           <kbd className="result-kbd">Ctrl</kbd>
           {' + '}
-          <kbd className="result-kbd">V</kbd> на ПК или «Вставить» на телефоне) и отправьте сообщение.
+          <kbd className="result-kbd">V</kbd> на ПК или «Вставить» на телефоне) и отправьте сообщение.{' '}
+          <strong>Тренеры:</strong> {COACH_SIMULATION_PROMPT_EXTRA}
         </p>
 
         <div className="result-actions">

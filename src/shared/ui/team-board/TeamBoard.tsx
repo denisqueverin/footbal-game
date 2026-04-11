@@ -5,7 +5,16 @@ import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import { formationRowsForDisplay, type FormationId } from '@/entities/game/core/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 import { isChaosMode, isNationalDraftSource } from '@/entities/game/modes/gameMode';
-import type { ColorSchemeId, GameMode, TeamState } from '@/entities/game/core/types';
+import type { CoachAssignment, ColorSchemeId, GameMode, TeamState } from '@/entities/game/core/types';
+import { schemeAccent } from '@/shared/lib/schemeAccent';
+
+function coachTacticalTooltip(coach: CoachAssignment): string {
+  return [
+    `Приоритетная схема: ${coach.priorityFormation}`,
+    `Сильные стороны: ${coach.strengthsRu}`,
+    `Слабые стороны: ${coach.weaknessesRu}`,
+  ].join('\n');
+}
 
 export interface TeamBoardProps {
   team: TeamState;
@@ -42,10 +51,7 @@ export function TeamBoard(props: TeamBoardProps) {
           <div style={styles.small}>{formationLabel(props.formation)}</div>
         </div>
         {props.bestLineupHint ? (
-          <div style={styles.hintCol}>
-            <div style={styles.hintCounter}>
-              Подсказки: {props.bestLineupHint.remaining} / {props.bestLineupHint.budget}
-            </div>
+          <div style={styles.hintBtnWrap}>
             <button
               type="button"
               disabled={
@@ -63,92 +69,115 @@ export function TeamBoard(props: TeamBoardProps) {
                   ? 'Подсказки закончились'
                   : props.bestLineupHint.usedThisRound
                     ? 'В этом раунде подсказка уже использована'
-                    : undefined
+                    : 'Подсказка по лучшему составу на текущий раунд'
               }
             >
-              {props.bestLineupHint.remaining <= 0
-                ? 'Нет подсказок'
-                : props.bestLineupHint.usedThisRound
-                  ? 'Уже в раунде'
-                  : 'Лучший состав'}
+              Лучший состав {props.bestLineupHint.remaining}/{props.bestLineupHint.budget}
             </button>
           </div>
         ) : null}
       </div>
 
-      <div style={{ ...styles.pitch, background: pitchBackground(props.team.colorScheme) }}>
-        {rows.map((row, rowIdx) => (
-          <div
-            key={rowIdx}
-            style={{
-              ...styles.row,
-              gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {row.map((cell) => {
-              const pick = props.team.picksBySlotId[cell.slotId];
-              const isSelected = props.selectedSlotId === cell.slotId;
-              const isTaken = Boolean(pick?.playerName);
-              const isPending = props.pendingPick?.slotId === cell.slotId && !isTaken;
-              const chaosKind =
-                isChaosMode(props.mode) ? inferChaosSourceKind(pick?.country) : null;
-              const flagUrl = isNationalDraftSource(props.mode, chaosKind)
-                ? getCountryFlagUrlRu(pick?.country)
-                : getClubFlagUrl(pick?.country);
-              const sourceLabel = pick?.country ?? '';
-
-              return (
-                <button
-                  key={cell.slotId}
-                  type="button"
-                  disabled={props.disabled || isTaken || isPending}
-                  onClick={() => props.onSelectSlot?.(cell.slotId)}
-                  style={{
-                    ...styles.slot,
-                    ...(isTaken ? styles.slotTaken : null),
-                    ...(isSelected ? styles.slotSelected : null),
-                    ...(props.disabled ? styles.slotDisabled : null),
-                  }}
-                  title={
-                    isTaken
-                      ? `${pick?.playerName ?? '—'} (${sourceLabel || '—'})`
-                      : 'Выбрать слот'
-                  }
-                >
-                  <div style={styles.slotLabel}>{cell.label}</div>
-                  <div style={styles.slotName}>
-                    {isPending ? (
-                      <span style={styles.pendingWrap}>
-                        <span style={styles.spinner} aria-hidden="true" />
-                        Думает…
-                      </span>
-                    ) : (
-                      <span style={styles.nameWrap}>
-                        <span>{pick?.playerName ?? '—'}</span>
-                        {pick?.pickedBy === 'cpu' && pick?.playerStars != null ? (
-                          <span style={styles.cpuStars} title={`Уровень: ${pick.playerStars}★`}>
-                            {pick.playerStars}★
-                          </span>
-                        ) : null}
-                      </span>
-                    )}
-                  </div>
-                  <div style={styles.slotMeta}>
-                    {sourceLabel ? <span style={styles.slotMetaText}>{sourceLabel}</span> : null}
-                    {flagUrl ? (
-                      <img
-                        src={flagUrl}
-                        alt=""
-                        style={styles.flagImg}
-                        loading="lazy"
-                      />
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
+      {props.team.coach ? (
+        <div
+          style={{
+            ...styles.coachStrip,
+            borderLeft: `3px solid ${schemeAccent(props.team.colorScheme)}`,
+          }}
+          title={coachTacticalTooltip(props.team.coach)}
+        >
+          {getCountryFlagUrlRu(props.team.coach.countryRu) ? (
+            <img
+              src={getCountryFlagUrlRu(props.team.coach.countryRu)!}
+              alt=""
+              style={styles.coachFlag}
+              width={28}
+              height={18}
+            />
+          ) : null}
+          <div style={styles.coachStripText}>
+            <span style={styles.coachStripLabel}>Тренер</span>
+            <span style={styles.coachStripName}>{props.team.coach.name}</span>
+            <span style={styles.coachStripStars}>{props.team.coach.stars}★</span>
           </div>
-        ))}
+        </div>
+      ) : null}
+
+      <div style={{ ...styles.pitch, background: pitchBackground(props.team.colorScheme) }}>
+        <div style={styles.pitchRows}>
+          {rows.map((row, rowIdx) => (
+            <div
+              key={rowIdx}
+              style={{
+                ...styles.row,
+                gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {row.map((cell) => {
+                const pick = props.team.picksBySlotId[cell.slotId];
+                const isSelected = props.selectedSlotId === cell.slotId;
+                const isTaken = Boolean(pick?.playerName);
+                const isPending = props.pendingPick?.slotId === cell.slotId && !isTaken;
+                const chaosKind =
+                  isChaosMode(props.mode) ? inferChaosSourceKind(pick?.country) : null;
+                const flagUrl = isNationalDraftSource(props.mode, chaosKind)
+                  ? getCountryFlagUrlRu(pick?.country)
+                  : getClubFlagUrl(pick?.country);
+                const sourceLabel = pick?.country ?? '';
+
+                return (
+                  <button
+                    key={cell.slotId}
+                    type="button"
+                    disabled={props.disabled || isTaken || isPending}
+                    onClick={() => props.onSelectSlot?.(cell.slotId)}
+                    style={{
+                      ...styles.slot,
+                      ...(isTaken ? styles.slotTaken : null),
+                      ...(isSelected ? styles.slotSelected : null),
+                      ...(props.disabled ? styles.slotDisabled : null),
+                    }}
+                    title={
+                      isTaken
+                        ? `${pick?.playerName ?? '—'} (${sourceLabel || '—'})`
+                        : 'Выбрать слот'
+                    }
+                  >
+                    <div style={styles.slotLabel}>{cell.label}</div>
+                    <div style={styles.slotName}>
+                      {isPending ? (
+                        <span style={styles.pendingWrap}>
+                          <span style={styles.spinner} aria-hidden="true" />
+                          Думает…
+                        </span>
+                      ) : (
+                        <span style={styles.nameWrap}>
+                          <span>{pick?.playerName ?? '—'}</span>
+                          {pick?.pickedBy === 'cpu' && pick?.playerStars != null ? (
+                            <span style={styles.cpuStars} title={`Уровень: ${pick.playerStars}★`}>
+                              {pick.playerStars}★
+                            </span>
+                          ) : null}
+                        </span>
+                      )}
+                    </div>
+                    <div style={styles.slotMeta}>
+                      {sourceLabel ? <span style={styles.slotMetaText}>{sourceLabel}</span> : null}
+                      {flagUrl ? (
+                        <img
+                          src={flagUrl}
+                          alt=""
+                          style={styles.flagImg}
+                          loading="lazy"
+                        />
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -175,6 +204,9 @@ function pitchBackground(scheme: ColorSchemeId): string {
 
 const styles: Record<string, CSSProperties> = {
   card: {
+    flex: '1 1 auto',
+    minHeight: 0,
+    width: '100%',
     height: '100%',
     borderRadius: 16,
     border: '1px solid rgba(255,255,255,0.12)',
@@ -188,16 +220,17 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    gap: 12,
-    padding: 12,
+    gap: 10,
+    padding: '8px 10px',
+    minHeight: 46,
+    boxSizing: 'border-box',
     borderBottom: '1px solid rgba(255,255,255,0.10)',
     background: 'rgba(0,0,0,0.14)',
     flexWrap: 'wrap',
   },
   headerMain: { minWidth: 0, flex: '1 1 auto' },
   teamName: { fontWeight: 800, letterSpacing: -0.2 },
-  hintCol: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 },
-  hintCounter: { fontSize: 11, fontWeight: 700, opacity: 0.85, whiteSpace: 'nowrap' },
+  hintBtnWrap: { flexShrink: 0, alignSelf: 'flex-start' },
   hintBtn: {
     flexShrink: 0,
     padding: '7px 10px',
@@ -218,32 +251,92 @@ const styles: Record<string, CSSProperties> = {
     color: 'inherit',
     fontWeight: 650,
   },
-  small: { opacity: 0.75, fontSize: 13 },
+  small: { opacity: 0.75, fontSize: 12 },
+  coachStrip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    minHeight: 38,
+    boxSizing: 'border-box',
+    background: 'rgba(0,0,0,0.2)',
+    borderBottom: '1px solid rgba(255,255,255,0.08)',
+    cursor: 'help',
+  },
+  coachFlag: {
+    flexShrink: 0,
+    objectFit: 'cover',
+    borderRadius: 4,
+    border: '1px solid rgba(0,0,0,0.35)',
+  },
+  coachStripText: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: 8,
+    minWidth: 0,
+  },
+  coachStripLabel: { fontSize: 10, fontWeight: 750, opacity: 0.65, textTransform: 'uppercase' },
+  coachStripName: { fontWeight: 800, fontSize: 13 },
+  coachStripStars: { fontSize: 12, fontWeight: 850, opacity: 0.9 },
   pitch: {
     flex: '1 1 auto',
-    padding: 12,
-    display: 'grid',
-    gap: 12,
+    minHeight: 0,
+    padding: '6px 8px',
+    display: 'flex',
+    flexDirection: 'column',
   },
-  row: { display: 'grid', gap: 10 },
+  pitchRows: {
+    flex: '1 1 auto',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    gap: 'clamp(4px, 0.9dvh, 10px)',
+  },
+  row: {
+    display: 'grid',
+    gap: 'clamp(4px, 0.8vw, 8px)',
+    alignItems: 'stretch',
+    minHeight: 0,
+  },
   slot: {
-    borderRadius: 14,
+    borderRadius: 12,
     border: '1px solid rgba(255,255,255,0.14)',
     background: 'rgba(0,0,0,0.22)',
-    padding: 10,
+    padding: 'clamp(4px, 0.9dvh, 9px)',
     textAlign: 'center',
     color: 'inherit',
     cursor: 'pointer',
-    minHeight: 78,
-    display: 'grid',
-    alignContent: 'center',
-    gap: 3,
+    minHeight: 'clamp(48px, 6dvh, 82px)',
+    alignSelf: 'stretch',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    gap: 2,
   },
   slotDisabled: { cursor: 'not-allowed' },
   slotTaken: { border: '1px solid rgba(255,255,255,0.22)', background: 'rgba(0,0,0,0.32)' },
   slotSelected: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
-  slotLabel: { fontSize: 12, opacity: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  slotName: { fontWeight: 750, fontSize: 14, lineHeight: 1.15 },
+  slotLabel: {
+    fontSize: 11,
+    opacity: 0.8,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotName: {
+    fontWeight: 750,
+    fontSize: 'clamp(10px, 0.85vw + 8px, 13px)',
+    lineHeight: 1.15,
+    flex: '1 1 auto',
+    minHeight: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   nameWrap: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -262,19 +355,20 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: 'nowrap',
   },
   slotMeta: {
-    fontSize: 12,
+    fontSize: 10,
     opacity: 0.8,
+    flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     flexWrap: 'wrap',
-    minHeight: 18,
+    minHeight: 14,
   },
   slotMetaText: { lineHeight: 1.2 },
   flagImg: {
-    width: 18,
-    height: 12,
+    width: 16,
+    height: 11,
     objectFit: 'cover',
     borderRadius: 2,
     border: '1px solid rgba(0,0,0,0.4)',

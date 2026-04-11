@@ -13,6 +13,8 @@ import type {
   TeamId,
 } from '@/entities/game/core/types';
 
+import { CoachDraftPage } from '@/pages/coach-draft-page/CoachDraftPage';
+import { FormationPickPage } from '@/pages/formation-pick-page/FormationPickPage';
 import { DrawRevealPage } from '@/pages/draw-reveal-page';
 import { GamePage } from '@/pages/game-page';
 import { ResultPage } from '@/pages/result-page';
@@ -40,8 +42,8 @@ export function App() {
     dispatch({ type: 'setup/setMode', mode });
   }, []);
 
-  const handleSetupSetCpuDifficulty = useCallback((difficulty: CpuDifficulty) => {
-    dispatch({ type: 'setup/setCpuDifficulty', difficulty });
+  const handleSetupSetCpuDifficultyForTeam = useCallback((team: TeamId, difficulty: CpuDifficulty) => {
+    dispatch({ type: 'setup/setCpuDifficultyForTeam', team, difficulty });
   }, []);
 
   const handleSetupSetTeamCount = useCallback((count: TeamCount) => {
@@ -50,10 +52,6 @@ export function App() {
 
   const handleSetupSetTeamController = useCallback((team: TeamId, controller: TeamController) => {
     dispatch({ type: 'setup/setTeamController', team, controller });
-  }, []);
-
-  const handleSetupSetTeamFormation = useCallback((team: TeamId, formation: FormationId) => {
-    dispatch({ type: 'setup/setTeamFormation', team, formation });
   }, []);
 
   const handleSetupSetTeamColorScheme = useCallback((team: TeamId, scheme: ColorSchemeId) => {
@@ -88,6 +86,18 @@ export function App() {
 
   const handleDrawRevealContinue = useCallback(() => {
     dispatch({ type: 'drawReveal/continue' });
+  }, []);
+
+  const handleCoachDraftEliminateCoach = useCallback((coachId: string) => {
+    dispatch({ type: 'coachDraft/eliminateCoach', coachId });
+  }, []);
+
+  const handleCoachDraftSelectFinalCoach = useCallback((coachId: string) => {
+    dispatch({ type: 'coachDraft/selectFinalCoach', coachId });
+  }, []);
+
+  const handleFormationPickSelect = useCallback((formation: FormationId) => {
+    dispatch({ type: 'formationPick/selectFormation', formation });
   }, []);
 
   const handleDraftConfirmPick = useCallback(
@@ -126,19 +136,17 @@ export function App() {
   if (state.phase === 'setup') {
     return (
       <SetupPage
-        formationLocked={state.formationLocked}
         teamOrder={state.teamOrder}
         teams={state.teams}
         mode={state.mode}
         gameKind={state.gameKind}
-        cpuDifficulty={state.cpuDifficulty}
+        cpuDifficultyByTeam={state.cpuDifficultyByTeam}
         teamControllers={state.teamControllers}
         onSetTeamController={handleSetupSetTeamController}
-        onSetTeamFormation={handleSetupSetTeamFormation}
         onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
         onSetMode={handleSetupSetMode}
-        onSetCpuDifficulty={handleSetupSetCpuDifficulty}
+        onSetCpuDifficultyForTeam={handleSetupSetCpuDifficultyForTeam}
         hintsBudget={state.hintsBudgetPerPlayer}
         onSetHintsBudget={handleSetupSetHintsBudget}
         randomPlayerHintsBudget={state.randomPlayerHintsBudgetPerPlayer}
@@ -159,6 +167,32 @@ export function App() {
         state={state}
         onAssignTeamNames={handleDrawRevealAssignTeamNames}
         onContinue={handleDrawRevealContinue}
+        onReset={handleGameReset}
+        continueButtonLabel={
+          state.teamOrder.every((id) => !state.teams[id].coach)
+            ? 'Перейти к выбору тренера'
+            : undefined
+        }
+      />
+    );
+  }
+
+  if (state.phase === 'coachDraft') {
+    return (
+      <CoachDraftPage
+        state={state}
+        onEliminateCoach={handleCoachDraftEliminateCoach}
+        onSelectFinalCoach={handleCoachDraftSelectFinalCoach}
+        onReset={handleGameReset}
+      />
+    );
+  }
+
+  if (state.phase === 'formationPick') {
+    return (
+      <FormationPickPage
+        state={state}
+        onSelectFormation={handleFormationPickSelect}
         onReset={handleGameReset}
       />
     );

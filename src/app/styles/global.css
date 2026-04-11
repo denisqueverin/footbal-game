@@ -670,6 +670,48 @@ h3,
   );
 }
 
+.game-turn-order-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px 20px;
+}
+
+.game-turn-order-main {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.game-turn-order-rounds-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 18px;
+}
+
+.game-turn-order-segment {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.game-turn-order-segment--next {
+  flex: 1 1 200px;
+  padding-left: 16px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 0.95;
+}
+
+@media (max-width: 640px) {
+  .game-turn-order-segment--next {
+    flex-basis: 100%;
+    padding-left: 0;
+    border-left: none;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
 .game-turn-order-label {
   font-size: 12px;
   font-weight: 800;
@@ -679,11 +721,80 @@ h3,
   margin-bottom: 8px;
 }
 
+.game-turn-order-label--next {
+  opacity: 0.58;
+}
+
 .game-turn-order-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.game-turn-order-chips--muted {
+  opacity: 0.9;
+}
+
+.game-turn-order-times {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding-left: 16px;
+  margin-left: auto;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+  max-width: min(100%, 220px);
+}
+
+.game-turn-order-draft-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.88;
+}
+
+.game-turn-order-draft-times--in-bottom {
+  margin-top: 0;
+  margin-bottom: 10px;
+  padding-top: 0;
+  border-top: none;
+}
+
+@media (max-width: 640px) {
+  .game-turn-order-times {
+    flex-basis: 100%;
+    max-width: none;
+    align-items: flex-start;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+.game-turn-order-draft-time-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.game-turn-order-draft-time-name {
+  font-weight: 700;
+  opacity: 0.95;
+}
+
+.game-turn-order-draft-time-val {
+  font-weight: 750;
+  opacity: 0.82;
 }
 
 .game-turn-chip {
@@ -709,6 +820,11 @@ h3,
   box-shadow:
     0 0 0 2px var(--chip-accent),
     0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.game-turn-chip--next-preview {
+  opacity: 0.72;
+  font-size: 13px;
 }
 
 .game-turn-chip-num {
@@ -2191,5 +2307,590 @@ h3,
     width: 100%;
     text-align: center;
   }
+}
+
+.result-team-coach {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  margin-top: 6px;
+  margin-bottom: 8px;
+  opacity: 0.92;
+}
+
+.result-team-coach-flag {
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  object-fit: cover;
+}
+
+.coach-draft-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: radial-gradient(circle at 50% 0%, rgba(80, 120, 255, 0.12), transparent 55%),
+    linear-gradient(180deg, #0c1018, #070a10);
+}
+
+/* Четыре команды: контент на всю ширину окна, четыре колонки в одном ряду */
+.coach-draft-page--four {
+  place-items: start stretch;
+  align-content: start;
+}
+
+.coach-draft-card {
+  width: min(1080px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  padding: 22px 22px 18px;
+  box-sizing: border-box;
+}
+
+.coach-draft-card--four {
+  width: 100%;
+  max-width: none;
+}
+
+.coach-draft-card--four .coach-draft-title {
+  font-size: clamp(18px, 2.2vw, 22px);
+}
+
+.coach-draft-card--four .coach-draft-sub {
+  font-size: clamp(12px, 1.35vw, 14px);
+}
+
+.coach-draft-card--four .coach-draft-pool-label {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.coach-draft-version {
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+
+.coach-draft-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.coach-draft-sub {
+  margin: 0 0 18px;
+  opacity: 0.85;
+  line-height: 1.45;
+  font-size: 15px;
+}
+
+.coach-draft-section {
+  margin-top: 8px;
+}
+
+.coach-draft-pools-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.coach-draft-pools-row--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .coach-draft-pools-row--four {
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x proximity;
+  }
+
+  .coach-draft-pools-row--four .coach-draft-pool-block {
+    scroll-snap-align: start;
+  }
+}
+
+.coach-draft-pool-block {
+  border-radius: 16px;
+  padding: 12px 12px 4px;
+  border-width: 2px;
+  border-style: solid;
+}
+
+.coach-draft-pool-block--target {
+  border-color: rgba(128, 168, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(128, 168, 255, 0.12);
+}
+
+/* Жертва снятия — кольцо поверх цвета команды */
+.coach-draft-pool-block--victim {
+  opacity: 1;
+  box-shadow:
+    0 0 0 2px rgba(255, 220, 140, 0.65),
+    0 0 28px rgba(255, 160, 70, 0.32);
+}
+
+/* Остальные команды на шаге снятия: неактивны, только колонка жертвы в фокусе */
+.coach-draft-pool-block--eliminate-bystander {
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  filter: saturate(0.72);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.coach-draft-pool-block--picker-turn {
+  box-shadow: 0 0 0 2px rgba(140, 200, 255, 0.55), 0 0 20px rgba(80, 160, 255, 0.22);
+}
+
+.coach-draft-pool-block--done {
+  opacity: 0.92;
+}
+
+.coach-draft-pool-label {
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+
+.coach-draft-pool-scheme {
+  font-weight: 750;
+  opacity: 0.82;
+}
+
+.coach-draft-flow {
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.coach-draft-flow-strip {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  min-height: 30px;
+}
+
+.coach-draft-flow-ellipsis {
+  flex-shrink: 0;
+  opacity: 0.38;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  user-select: none;
+}
+
+.coach-draft-flow-cell {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 3px 6px 3px 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.coach-draft-flow-cell--current {
+  border-color: rgba(140, 190, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(120, 170, 255, 0.25);
+  background: rgba(50, 90, 160, 0.12);
+}
+
+.coach-draft-flow-pill {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.coach-draft-flow-pill--victim {
+  box-shadow: inset 0 0 0 1px rgba(255, 210, 140, 0.22);
+}
+
+.coach-draft-flow-mid {
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0.5;
+  user-select: none;
+  padding: 0 1px;
+}
+
+.coach-draft-pool-done {
+  font-size: 14px;
+  opacity: 0.88;
+  line-height: 1.45;
+  padding-bottom: 8px;
+}
+
+.coach-draft-pool-done-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.coach-draft-pool-done-head .coach-draft-flag {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.coach-draft-profile {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 11px;
+  line-height: 1.42;
+  color: inherit;
+}
+
+.coach-draft-cardbtn--pick .coach-draft-profile {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.coach-draft-profile-scheme {
+  font-weight: 800;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.coach-draft-profile-line {
+  margin: 0 0 5px;
+}
+
+.coach-draft-profile-line:last-child {
+  margin-bottom: 0;
+}
+
+.coach-draft-profile-label {
+  font-weight: 750;
+  color: inherit;
+  opacity: 0.72;
+}
+
+.coach-draft-cardbtn--readonly {
+  cursor: default;
+  pointer-events: none;
+}
+
+.coach-draft-hint {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 12px;
+}
+
+.coach-draft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: stretch;
+}
+
+.coach-draft-grid--two {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  align-items: stretch;
+}
+
+.coach-draft-cardbtn {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  align-self: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+/* Явный светлый текст: у <button> иначе часто подставляется системный цвет (плохо на «белой» панели). */
+.coach-draft-pool-block .coach-draft-cardbtn,
+.coach-draft-pool-block .coach-draft-name,
+.coach-draft-pool-block .coach-draft-meta {
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.coach-draft-pool-block button.coach-draft-cardbtn {
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.coach-draft-pool-block .coach-draft-pool-label {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.coach-draft-pool-block .coach-draft-pool-scheme {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.coach-draft-pool-block .coach-draft-pool-done {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* Финальный выбор тренера: обе карточки одной высоты в ряду */
+.coach-draft-grid--two > .coach-draft-cardbtn {
+  min-height: clamp(260px, 42vh, 440px);
+}
+
+.coach-draft-cardbtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.coach-draft-cardbtn--selected {
+  border-color: rgba(128, 168, 255, 0.85);
+  background: rgba(68, 120, 255, 0.2);
+  box-shadow: 0 0 0 1px var(--coach-accent, rgba(120, 160, 255, 0.35));
+}
+
+.coach-draft-cardbtn--pick:hover:not(:disabled) {
+  border-color: rgba(128, 168, 255, 0.75);
+  background: rgba(68, 120, 255, 0.15);
+}
+
+.coach-draft-flag {
+  display: block;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  object-fit: cover;
+}
+
+.coach-draft-name {
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.coach-draft-meta {
+  flex-shrink: 0;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.coach-draft-primary {
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 168, 255, 0.85);
+  background: rgba(68, 120, 255, 0.35);
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.coach-draft-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.coach-draft-foot {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.coach-draft-ghost {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.coach-draft-cpu-thinking {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.coach-draft-cpu-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  animation: fc-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.formation-pick-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: radial-gradient(circle at 50% 0%, rgba(80, 120, 255, 0.12), transparent 55%),
+    linear-gradient(180deg, #0c1018, #070a10);
+}
+
+.formation-pick-shell {
+  width: min(920px, 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  padding: 22px 22px 18px;
+  box-sizing: border-box;
+}
+
+.formation-pick-version {
+  text-align: right;
+  font-size: 12px;
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+
+.formation-pick-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.formation-pick-sub {
+  margin: 0 0 18px;
+  opacity: 0.88;
+  line-height: 1.45;
+  font-size: 15px;
+}
+
+.formation-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.formation-pick-cardbtn {
+  position: relative;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: inherit;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.formation-pick-cardbtn:hover:not(:disabled) {
+  border-color: rgba(128, 168, 255, 0.55);
+  background: rgba(68, 120, 255, 0.1);
+}
+
+.formation-pick-cardbtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.formation-pick-cardbtn--priority {
+  border-color: rgba(212, 175, 55, 0.75);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25), inset 0 0 0 1px rgba(212, 175, 55, 0.08);
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.formation-pick-cardbtn-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.formation-pick-cardbtn-name {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.formation-pick-crown {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.formation-pick-foot {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.formation-pick-ghost {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.formation-pick-cpu-thinking {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.formation-pick-cpu-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  animation: fc-spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 

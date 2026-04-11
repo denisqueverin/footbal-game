@@ -1,3 +1,4 @@
+import { isCpuControlledTeam } from '../modes/gameMode'
 import type { GameState } from './types'
 
 /** Есть ли в активных командах хотя бы один CPU. */
@@ -8,12 +9,20 @@ export function hasAnyCpuTeam(state: GameState): boolean {
 
 /**
  * Подсказка «Лучший состав»: со скамейкой или без.
- * Без скамейки только при сложности CPU «Хард», если в матче есть компьютер.
+ * Без скамейки, если хотя бы один компьютер в матче играет на «Хард».
  * Во всех остальных случаях — со скамейкой.
  */
 export function computeBestLineupIncludeBench(state: GameState): boolean {
   if (!hasAnyCpuTeam(state)) return true
-  return state.cpuDifficulty !== 'hard'
+  const ctx = {
+    gameKind: state.gameKind,
+    teamOrder: state.teamOrder,
+    teamControllers: state.teamControllers,
+  }
+  const anyCpuHard = state.teamOrder.some(
+    (id) => isCpuControlledTeam(ctx, id) && state.cpuDifficultyByTeam[id] === 'hard',
+  )
+  return !anyCpuHard
 }
 
 export function withBestLineupBenchRule<T extends GameState>(state: T): T {

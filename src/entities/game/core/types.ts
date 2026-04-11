@@ -10,7 +10,36 @@ export type HintsBudget = 0 | 1 | 2 | 3 | 11
 /** Сколько подсказок «Случайный игрок» у каждой команды за всю игру. 0 — подсказки выключены. */
 export type RandomPlayerHintsBudget = 0 | 1 | 2 | 3 | 11
 
-export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
+export type GamePhase = 'setup' | 'coachDraft' | 'formationPick' | 'drawReveal' | 'drafting' | 'finished'
+
+export type CoachStars = 2 | 3 | 4 | 5
+
+export type CoachAssignment = {
+  id: string
+  name: string
+  countryRu: string
+  stars: CoachStars
+  /** Характерная расстановка в пиковые периоды карьеры. */
+  priorityFormation: string
+  strengthsRu: string
+  weaknessesRu: string
+}
+
+/** Фаза выбора тренера до жеребьёвки. */
+export type CoachDraftPhaseState = {
+  step: 'eliminate' | 'pick'
+  pools: Record<TeamId, CoachAssignment[]>
+  /** Глобальный шаг снятия: убирает order[k%n] у order[(k+1)%n], всего 3·N шагов. */
+  eliminationStepIndex: number
+  /** Чья очередь финально выбрать тренера (фаза pick). */
+  activeIndex: number
+  pendingEliminateIds: string[]
+}
+
+/** После драфта тренеров — по очереди выбор схемы поля. */
+export type FormationPickPhaseState = {
+  activeIndex: number
+}
 
 /** Формат партии: обычная (несколько людей) или против компьютера (1 игрок). */
 export type GameKind = 'multi' | 'vsCpu'
@@ -43,16 +72,25 @@ export type TeamState = {
   name: string
   formation: FormationId
   colorScheme: ColorSchemeId
+  /** Выбранный тренер (после драфта тренеров). */
+  coach: CoachAssignment | null
   picksBySlotId: Record<string, SlotPick>
 }
+
+/** Сложность CPU по команде (для людей значение не используется). */
+export type CpuDifficultyByTeam = Record<TeamId, CpuDifficulty>
 
 export type GameState = {
   phase: GamePhase
   gameKind: GameKind
-  cpuDifficulty: CpuDifficulty
+  cpuDifficultyByTeam: CpuDifficultyByTeam
   formationLocked: boolean
   teamOrder: TeamId[]
   mode: GameMode
+  /** Состояние мини-драфта тренеров; null вне фазы coachDraft. */
+  coachDraft: CoachDraftPhaseState | null
+  /** Выбор схемы после тренеров; null вне фазы formationPick. */
+  formationPick: FormationPickPhaseState | null
 
   /** Кто управляет каждой командой: человек или компьютер. */
   teamControllers: Record<TeamId, TeamController>
