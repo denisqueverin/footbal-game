@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef, type ReactNode } from 'react';
 
 import type { FormationId } from '@/entities/game/core/formations';
 import { createInitialGameState, gameReducer } from '@/entities/game/core/reducer';
@@ -133,8 +133,10 @@ export function App() {
     dispatch({ type: 'draft/clearRandomPlayerHintError' });
   }, []);
 
+  let page: ReactNode;
+
   if (state.phase === 'setup') {
-    return (
+    page = (
       <SetupPage
         teamOrder={state.teamOrder}
         teams={state.teams}
@@ -155,30 +157,22 @@ export function App() {
         onStart={handleSetupStart}
       />
     );
-  }
-
-  if (state.phase === 'finished') {
-    return <ResultPage state={state} onReset={handleGameReset} />;
-  }
-
-  if (state.phase === 'drawReveal') {
-    return (
+  } else if (state.phase === 'finished') {
+    page = <ResultPage state={state} onReset={handleGameReset} />;
+  } else if (state.phase === 'drawReveal') {
+    page = (
       <DrawRevealPage
         state={state}
         onAssignTeamNames={handleDrawRevealAssignTeamNames}
         onContinue={handleDrawRevealContinue}
         onReset={handleGameReset}
         continueButtonLabel={
-          state.teamOrder.every((id) => !state.teams[id].coach)
-            ? 'Перейти к выбору тренера'
-            : undefined
+          state.teamOrder.every((id) => !state.teams[id].coach) ? 'Перейти к выбору тренера' : undefined
         }
       />
     );
-  }
-
-  if (state.phase === 'coachDraft') {
-    return (
+  } else if (state.phase === 'coachDraft') {
+    page = (
       <CoachDraftPage
         state={state}
         onEliminateCoach={handleCoachDraftEliminateCoach}
@@ -186,28 +180,37 @@ export function App() {
         onReset={handleGameReset}
       />
     );
-  }
-
-  if (state.phase === 'formationPick') {
-    return (
+  } else if (state.phase === 'formationPick') {
+    page = (
       <FormationPickPage
         state={state}
         onSelectFormation={handleFormationPickSelect}
         onReset={handleGameReset}
       />
     );
+  } else {
+    page = (
+      <GamePage
+        state={state}
+        onConfirmPick={handleDraftConfirmPick}
+        onReset={handleGameReset}
+        onSetDraftTimerPaused={handleSetDraftTimerPaused}
+        onSetPickPlayerName={handleSetPickPlayerName}
+        onUseBestLineupHint={handleUseBestLineupHint}
+        onUseRandomPlayerHint={handleUseRandomPlayerHint}
+        onClearRandomPlayerHintError={handleClearRandomPlayerHintError}
+      />
+    );
   }
 
   return (
-    <GamePage
-      state={state}
-      onConfirmPick={handleDraftConfirmPick}
-      onReset={handleGameReset}
-      onSetDraftTimerPaused={handleSetDraftTimerPaused}
-      onSetPickPlayerName={handleSetPickPlayerName}
-      onUseBestLineupHint={handleUseBestLineupHint}
-      onUseRandomPlayerHint={handleUseRandomPlayerHint}
-      onClearRandomPlayerHintError={handleClearRandomPlayerHintError}
-    />
+    <>
+      <a className="fc-skip-link" href="#main-content">
+        К основному содержимому
+      </a>
+      <main id="main-content" className="fc-app-main" tabIndex={-1}>
+        {page}
+      </main>
+    </>
   );
 }

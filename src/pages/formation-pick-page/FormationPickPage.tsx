@@ -6,6 +6,7 @@ import { pickCpuFormationForCoach } from '@/entities/game/data/coaches';
 import { formationLabelShort } from '@/pages/setup-page/setup-page.utils';
 import { APP_VERSION } from '@/shared/config/version';
 import { FormationPreview } from '@/shared/ui/formation-preview';
+import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 
 const CPU_FORMATION_THINK_MS = 900;
@@ -96,7 +97,13 @@ export function FormationPickPage(props: FormationPickPageProps) {
         <div className="formation-pick-version">v{APP_VERSION}</div>
         <h1 className="formation-pick-title">Выбор схемы поля</h1>
         <p className="formation-pick-sub">
-          {displayName}: выберите расстановку. У тренера <strong>{coach?.name ?? '—'}</strong> приоритетная схема в
+          <span className="formation-pick-actor">
+            {displayName}
+            {isCpuTurn ? (
+              <CpuDifficultyIcon difficulty={state.cpuDifficultyByTeam[activeTeam]} />
+            ) : null}
+          </span>
+          : выберите расстановку. У тренера <strong>{coach?.name ?? '—'}</strong> приоритетная схема в
           карьере — <strong>{coach?.priorityFormation ?? '—'}</strong>
           {priorityFormation ? ' (совпадает с одной из сеток ниже — отмечена короной).' : ' (нет точного совпадения с доступными сетками).'}
         </p>

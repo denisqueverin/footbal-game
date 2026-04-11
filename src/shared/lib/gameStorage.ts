@@ -1,5 +1,6 @@
 import { coachProfileFor } from '@/entities/game/data/coachProfiles';
 import { assignPlaceholderTeamNames } from '@/entities/game/data/teamNames';
+import { coachDraftEliminationTotalSteps } from '@/entities/game/core/coachDraftPhase';
 import { computeBestLineupIncludeBench } from '@/entities/game/core/bestLineupBenchRule';
 import type {
   CpuDifficultyByTeam,
@@ -273,7 +274,7 @@ function normalizeGameState(state: GameState): GameState {
       eliminationsCompleted?: number
     }
     const n = merged.teamOrder.length
-    const total = 3 * n
+    const total = coachDraftEliminationTotalSteps(n)
     let eliminationStepIndex =
       typeof cd.eliminationStepIndex === 'number' && cd.eliminationStepIndex >= 0
         ? cd.eliminationStepIndex

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useMediaQuery } from '@/shared/lib/useMediaQuery';
 
@@ -25,6 +19,7 @@ import type {
   TeamState,
 } from '@/entities/game/core/types';
 
+import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 import { FormationPreview } from '@/shared/ui/formation-preview';
 import { schemeDotColor } from '@/shared/lib/schemeAccent';
 
@@ -61,6 +56,10 @@ export interface SetupPageProps {
   onStart: () => void;
 }
 
+function cn(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ');
+}
+
 interface CountButtonProps {
   count: TeamCount;
   isActive: boolean;
@@ -79,7 +78,7 @@ function HintBudgetButton(props: HintBudgetButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
-      style={{ ...baseStyles.countBtn, ...(props.isActive ? baseStyles.countBtnActive : null) }}
+      className={cn('setup-seg-btn', props.isActive && 'setup-seg-btn--active')}
       aria-pressed={props.isActive}
     >
       {props.budget}
@@ -98,7 +97,7 @@ function RandomHintBudgetButton(props: RandomHintBudgetButtonProps) {
     <button
       type="button"
       onClick={props.onPick}
-      style={{ ...baseStyles.countBtn, ...(props.isActive ? baseStyles.countBtnActive : null) }}
+      className={cn('setup-seg-btn', props.isActive && 'setup-seg-btn--active')}
       aria-pressed={props.isActive}
     >
       {props.budget}
@@ -111,16 +110,12 @@ function CpuDifficultyButtons(props: {
   devUnlocked: boolean;
   onPick: (d: CpuDifficulty) => void;
 }) {
-  const rowStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 };
   return (
-    <div style={rowStyle}>
+    <div className="setup-seg-row">
       <button
         type="button"
         onClick={() => props.onPick('beginner')}
-        style={{
-          ...baseStyles.modeBtn,
-          ...(props.value === 'beginner' ? baseStyles.modeBtnActive : null),
-        }}
+        className={cn('setup-seg-btn', props.value === 'beginner' && 'setup-seg-btn--active')}
         aria-pressed={props.value === 'beginner'}
       >
         Начинающий
@@ -128,10 +123,7 @@ function CpuDifficultyButtons(props: {
       <button
         type="button"
         onClick={() => props.onPick('normal')}
-        style={{
-          ...baseStyles.modeBtn,
-          ...(props.value === 'normal' ? baseStyles.modeBtnActive : null),
-        }}
+        className={cn('setup-seg-btn', props.value === 'normal' && 'setup-seg-btn--active')}
         aria-pressed={props.value === 'normal'}
       >
         Нормальный
@@ -139,10 +131,7 @@ function CpuDifficultyButtons(props: {
       <button
         type="button"
         onClick={() => props.onPick('hard')}
-        style={{
-          ...baseStyles.modeBtn,
-          ...(props.value === 'hard' ? baseStyles.modeBtnActive : null),
-        }}
+        className={cn('setup-seg-btn', props.value === 'hard' && 'setup-seg-btn--active')}
         aria-pressed={props.value === 'hard'}
       >
         Хард
@@ -151,10 +140,7 @@ function CpuDifficultyButtons(props: {
         <button
           type="button"
           onClick={() => props.onPick('unfair')}
-          style={{
-            ...baseStyles.modeBtn,
-            ...(props.value === 'unfair' ? baseStyles.modeBtnActive : null),
-          }}
+          className={cn('setup-seg-btn', props.value === 'unfair' && 'setup-seg-btn--active')}
           aria-pressed={props.value === 'unfair'}
         >
           Нечестный
@@ -170,7 +156,7 @@ function CountButton(props: CountButtonProps) {
       type="button"
       onClick={props.onPick}
       disabled={props.disabled}
-      style={{ ...baseStyles.countBtn, ...(props.isActive ? baseStyles.countBtnActive : null) }}
+      className={cn('setup-seg-btn', props.isActive && 'setup-seg-btn--active')}
       aria-pressed={props.isActive}
     >
       {props.count}
@@ -190,10 +176,14 @@ function SchemeButton(props: SchemeButtonProps) {
     <button
       type="button"
       onClick={() => props.onPick(props.schemeId)}
-      style={{ ...baseStyles.schemeBtn, ...(props.isActive ? baseStyles.schemeBtnActive : null) }}
+      className={cn('setup-scheme-btn', props.isActive && 'setup-scheme-btn--active')}
       aria-pressed={props.isActive}
     >
-      <span style={{ ...baseStyles.schemeDot, background: schemeDotColor(props.schemeId) }} aria-hidden="true" />
+      <span
+        className="setup-scheme-dot"
+        style={{ background: schemeDotColor(props.schemeId) }}
+        aria-hidden="true"
+      />
       {props.label}
     </button>
   );
@@ -205,77 +195,58 @@ interface TeamBoxProps {
   colorScheme: ColorSchemeId;
   isFormationDisabled: boolean;
   hideFormationPicker?: boolean;
-  /** Текст под цветами, если сетку выбирают позже */
   formationDeferredNote?: string;
-  /** Узкая вёрстка: одна колонка сетки схем */
   narrowLayout?: boolean;
-  /** Ровная высота карточек в сетке 2×2 (четыре команды). */
   unifyFourPlayers?: boolean;
+  /** У команды бота — иконка уровня рядом с названием. */
+  cpuDifficulty?: CpuDifficulty | null;
   onPickScheme: (scheme: ColorSchemeId) => void;
   onPickFormation: (formation: FormationId) => void;
 }
 
 function TeamBox(props: TeamBoxProps) {
-  const cardShell: CSSProperties = {
-    ...baseStyles.teamBox,
-    ...(props.unifyFourPlayers
-      ? {
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 320,
-          height: '100%',
-          boxSizing: 'border-box',
-        }
-      : null),
-  };
-
-  const bottomGrow: CSSProperties = {
-    flex: '1 1 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-end',
-    marginTop: 10,
-    minHeight: 0,
-  };
-
-  const inner =
-    props.hideFormationPicker ? (
-      <div style={baseStyles.muted}>
-        {props.formationDeferredNote ?? 'Схему выберет компьютер при старте игры'}
-      </div>
-    ) : (
-      <div
-        style={{
-          ...baseStyles.formationGrid,
-          gridTemplateColumns: props.narrowLayout ? '1fr' : 'repeat(2, minmax(0, 1fr))',
-        }}
-      >
-        {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
-          <button
-            key={formationId}
-            type="button"
-            onClick={() => props.onPickFormation(formationId)}
-            disabled={props.isFormationDisabled}
-            style={{
-              ...baseStyles.formationCard,
-              ...(props.activeFormation === formationId ? baseStyles.formationCardActive : null),
-              ...(props.isFormationDisabled ? baseStyles.formationCardDisabled : null),
-            }}
-            title={formationLabelShort(formationId)}
-          >
-            <div style={baseStyles.formationCardTop}>
-              <div style={baseStyles.formationName}>{formationLabelShort(formationId)}</div>
-            </div>
-            <FormationPreview formation={formationId} />
-          </button>
-        ))}
-      </div>
-    );
+  const inner = props.hideFormationPicker ? (
+    <div className="setup-muted">{props.formationDeferredNote ?? 'Схему выберет компьютер при старте игры'}</div>
+  ) : (
+    <div
+      className={cn(
+        'setup-formation-grid',
+        props.narrowLayout && 'setup-formation-grid--narrow',
+      )}
+    >
+      {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
+        <button
+          key={formationId}
+          type="button"
+          onClick={() => props.onPickFormation(formationId)}
+          disabled={props.isFormationDisabled}
+          className={cn(
+            'setup-formation-card',
+            props.activeFormation === formationId && 'setup-formation-card--active',
+          )}
+          title={formationLabelShort(formationId)}
+        >
+          <div className="setup-formation-name">{formationLabelShort(formationId)}</div>
+          <FormationPreview formation={formationId} />
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div style={cardShell}>
-      <div style={baseStyles.teamNameDisplay}>{props.teamName}</div>
-      <div style={baseStyles.schemeRowWithGap}>
+    <div className={cn('setup-team-box', props.unifyFourPlayers && 'setup-team-box--four-tall')}>
+      <div
+        className={cn(
+          'setup-team-name',
+          props.cpuDifficulty != null && 'setup-team-name--with-diff',
+        )}
+      >
+        <span className="setup-team-name-text">{props.teamName}</span>
+        {props.cpuDifficulty != null ? (
+          <CpuDifficultyIcon difficulty={props.cpuDifficulty} className="setup-team-name-diff" />
+        ) : null}
+      </div>
+      <div className="setup-scheme-row">
         {SETUP_SCHEME_OPTIONS.map((option) => (
           <SchemeButton
             key={option.id}
@@ -286,7 +257,7 @@ function TeamBox(props: TeamBoxProps) {
           />
         ))}
       </div>
-      {props.unifyFourPlayers ? <div style={bottomGrow}>{inner}</div> : inner}
+      {props.unifyFourPlayers ? <div className="setup-team-fill-bottom">{inner}</div> : inner}
     </div>
   );
 }
@@ -299,57 +270,6 @@ export function SetupPage(props: SetupPageProps) {
   const [devPassword, setDevPassword] = useState('');
   const isNarrow = useMediaQuery('(max-width: 640px)');
   const isFourPlayerMulti = props.gameKind === 'multi' && props.teamOrder.length === 4;
-
-  const styles = useMemo((): typeof baseStyles => {
-    return {
-      ...baseStyles,
-      page: {
-        ...baseStyles.page,
-        padding: isNarrow
-          ? 'max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))'
-          : 24,
-      },
-      card: {
-        ...baseStyles.card,
-        padding: isNarrow ? 14 : 20,
-      },
-      headerRow: {
-        ...baseStyles.headerRow,
-        flexDirection: isNarrow ? 'column' : 'row',
-        alignItems: isNarrow ? 'stretch' : 'flex-start',
-        gap: isNarrow ? 12 : 16,
-      },
-      h1: { ...baseStyles.h1, fontSize: isNarrow ? 24 : 28 },
-      teamFormations: {
-        ...baseStyles.teamFormations,
-        gridTemplateColumns: isNarrow ? '1fr' : 'repeat(2, minmax(0, 1fr))',
-        ...(isFourPlayerMulti ? { gap: 14, alignItems: 'stretch' } : {}),
-      },
-      teamWhoPlaysBox: {
-        ...baseStyles.teamBox,
-        ...(isFourPlayerMulti
-          ? {
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 284,
-              height: '100%',
-              boxSizing: 'border-box',
-            }
-          : {}),
-      },
-      teamWhoPlaysMeta: isFourPlayerMulti
-        ? {
-            marginTop: 10,
-            flex: '1 1 auto',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-            gap: 8,
-            minHeight: 132,
-          }
-        : { marginTop: 0 },
-    };
-  }, [isNarrow, isFourPlayerMulti]);
 
   const randomHintsSupported =
     props.mode === 'nationalTop15' ||
@@ -371,7 +291,6 @@ export function SetupPage(props: SetupPageProps) {
     [props.gameKind, props.teamControllers],
   );
 
-  /** «11» доступно только в режиме разработки; обычным игрокам — только 1–3. */
   const randomHintBudgetOptions = useMemo((): RandomPlayerHintsBudget[] => {
     const base: RandomPlayerHintsBudget[] = [...SETUP_RANDOM_PLAYER_HINT_BUDGETS];
     if (devUnlocked) base.push(11);
@@ -423,8 +342,6 @@ export function SetupPage(props: SetupPageProps) {
   };
 
   const handleDevCheckboxChange = useCallback(() => {
-    // Чекбокс контролируемый (checked={devUnlocked}), поэтому полагаемся на текущее состояние,
-    // а не на event.target.checked (оно может быть неконсистентно при мгновенном откате UI).
     if (!devUnlocked) {
       setDevPassword('');
       setDevModalOpen(true);
@@ -470,392 +387,392 @@ export function SetupPage(props: SetupPageProps) {
 
   return (
     <>
-      <div style={styles.page}>
-        <div style={styles.card}>
-        <div style={styles.headerRow}>
-          <div>
-            <div style={styles.h1}>Футбольный драфт</div>
-            <div style={styles.sub}>
-              Выберите режим драфта и сколько людей играет (1 — против компьютера), затем настройте команды и начните игру.
-            </div>
-          </div>
-          <div style={styles.headerActions}>
-            <label style={styles.devCheckboxLabel}>
-              <input
-                type="checkbox"
-                checked={devUnlocked}
-                onChange={handleDevCheckboxChange}
-                style={styles.devCheckbox}
-              />
-              Режим разработки
-            </label>
-            <button type="button" onClick={() => setRulesOpen(true)} style={styles.rulesBtn}>
-              Правила
-            </button>
-          </div>
-        </div>
-
-        <div style={styles.section}>
-          <div style={styles.labelRow}>
-            <div style={styles.label}>Режим игры</div>
-          </div>
-          <div style={styles.modeRow}>
-            <button
-              type="button"
-              onClick={() => props.onSetMode('nationalTop15')}
-              style={{
-                ...styles.modeBtn,
-                ...(modeGroupId === 'nations' ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={modeGroupId === 'nations'}
-            >
-              Сборные
-            </button>
-            <button
-              type="button"
-              onClick={() => props.onSetMode('clubs')}
-              style={{
-                ...styles.modeBtn,
-                ...(modeGroupId === 'clubs' ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={modeGroupId === 'clubs'}
-            >
-              Клубы
-            </button>
-            <button
-              type="button"
-              onClick={() => props.onSetMode('chaos')}
-              style={{
-                ...styles.modeBtn,
-                ...(modeGroupId === 'chaos' ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={modeGroupId === 'chaos'}
-            >
-              Хаос
-            </button>
-          </div>
-
-          {modeGroupId === 'nations' ? (
-            <div style={{ marginTop: 12 }}>
-              <div style={styles.labelRow}>
-                <div style={styles.labelMuted}>Сборные</div>
+      <div className="fc-page">
+        <div className="setup-card">
+          <header className="setup-hero">
+            <div>
+              <div className="setup-kicker">
+                <span className="setup-kicker-icon" aria-hidden="true">
+                  ⚽
+                </span>
+                Настройка партии
               </div>
-              <div style={styles.modeRow}>
-                <button
-                  type="button"
-                  onClick={() => props.onSetMode('nationalTop15')}
-                  style={{
-                    ...styles.modeBtn,
-                    ...(props.mode === 'nationalTop15' ? styles.modeBtnActive : null),
-                  }}
-                  aria-pressed={props.mode === 'nationalTop15'}
-                >
-                  ТОП-15
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onSetMode('nationalTop30')}
-                  style={{
-                    ...styles.modeBtn,
-                    ...(props.mode === 'nationalTop30' ? styles.modeBtnActive : null),
-                  }}
-                  aria-pressed={props.mode === 'nationalTop30'}
-                >
-                  ТОП-30
-                </button>
-              </div>
+              <h1 className="setup-title fc-heading">Футбольный драфт</h1>
+              <p className="setup-sub">
+                Выберите режим драфта и сколько людей играет (1 — против компьютера), затем настройте команды и
+                начните игру.
+              </p>
             </div>
-          ) : null}
-
-          {modeGroupId === 'clubs' ? (
-            <div style={{ marginTop: 12 }}>
-              <div style={styles.labelRow}>
-                <div style={styles.labelMuted}>Клубы</div>
-              </div>
-              <div style={styles.modeRow}>
-                <button
-                  type="button"
-                  onClick={() => props.onSetMode('clubs')}
-                  style={{
-                    ...styles.modeBtn,
-                    ...(props.mode === 'clubs' ? styles.modeBtnActive : null),
-                  }}
-                  aria-pressed={props.mode === 'clubs'}
-                >
-                  Европейские
-                </button>
-                <button
-                  type="button"
-                  onClick={() => props.onSetMode('rpl')}
-                  style={{
-                    ...styles.modeBtn,
-                    ...(props.mode === 'rpl' ? styles.modeBtnActive : null),
-                  }}
-                  aria-pressed={props.mode === 'rpl'}
-                >
-                  РПЛ
-                </button>
-              </div>
+            <div className="setup-header-actions">
+              <label className="setup-dev-checkbox">
+                <input type="checkbox" checked={devUnlocked} onChange={handleDevCheckboxChange} />
+                Режим разработки
+              </label>
+              <button type="button" onClick={() => setRulesOpen(true)} className="setup-rules-btn">
+                Правила
+              </button>
             </div>
-          ) : null}
+          </header>
 
-          <div style={styles.modeHelpBox}>{SETUP_MODE_GROUP_DESCRIPTIONS[modeGroupId]}</div>
-        </div>
+          <section className="setup-section" aria-labelledby="setup-mode-heading">
+            <div className="setup-label-row">
+              <h2 id="setup-mode-heading" className="setup-label">
+                Режим игры
+              </h2>
+            </div>
+            <div className="setup-seg-row">
+              <button
+                type="button"
+                onClick={() => props.onSetMode('nationalTop15')}
+                className={cn('setup-seg-btn', modeGroupId === 'nations' && 'setup-seg-btn--active')}
+                aria-pressed={modeGroupId === 'nations'}
+              >
+                Сборные
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetMode('clubs')}
+                className={cn('setup-seg-btn', modeGroupId === 'clubs' && 'setup-seg-btn--active')}
+                aria-pressed={modeGroupId === 'clubs'}
+              >
+                Клубы
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetMode('chaos')}
+                className={cn('setup-seg-btn', modeGroupId === 'chaos' && 'setup-seg-btn--active')}
+                aria-pressed={modeGroupId === 'chaos'}
+              >
+                Хаос
+              </button>
+            </div>
 
-        <div style={styles.section}>
-          <div style={styles.labelRow}>
-            <div style={styles.label}>Количество игроков</div>
-            <div style={styles.muted}>1 — один человек против компьютера (две команды); 2–4 — только люди или смесь с компьютером</div>
-          </div>
-          <div style={styles.teamCountRow}>
-            {SETUP_TEAM_COUNTS.map((count) => {
-              const activeCount = props.gameKind === 'vsCpu' ? 1 : props.teamOrder.length;
-              return (
-                <CountButton
-                  key={count}
-                  count={count}
-                  isActive={activeCount === count}
-                  onPick={() => props.onSetTeamCount(count)}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {props.gameKind === 'vsCpu' ? (
-          <div style={styles.section}>
-            <div style={styles.labelRow}>
-              <div style={styles.label}>Сложность компьютера</div>
-              <div style={styles.muted}>
-                Влияет на выбор игроков и тренеров по уровню (★).
-                {devUnlocked
-                  ? ' «Нечестный»: компьютер набирает из общего сильного пула, не из страны или клуба раунда.'
-                  : null}
+            {modeGroupId === 'nations' ? (
+              <div className="setup-nested">
+                <div className="setup-label-row">
+                  <span className="setup-label-muted">Сборные</span>
+                </div>
+                <div className="setup-seg-row">
+                  <button
+                    type="button"
+                    onClick={() => props.onSetMode('nationalTop15')}
+                    className={cn('setup-seg-btn', props.mode === 'nationalTop15' && 'setup-seg-btn--active')}
+                    aria-pressed={props.mode === 'nationalTop15'}
+                  >
+                    ТОП-15
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onSetMode('nationalTop30')}
+                    className={cn('setup-seg-btn', props.mode === 'nationalTop30' && 'setup-seg-btn--active')}
+                    aria-pressed={props.mode === 'nationalTop30'}
+                  >
+                    ТОП-30
+                  </button>
+                </div>
               </div>
-            </div>
-            <CpuDifficultyButtons
-              value={props.cpuDifficultyByTeam.team2}
-              devUnlocked={devUnlocked}
-              onPick={(d) => props.onSetCpuDifficultyForTeam('team2', d)}
-            />
-          </div>
-        ) : null}
+            ) : null}
 
-        {props.gameKind === 'multi' ? (
-          <div style={styles.section}>
-            <div style={styles.labelRow}>
-              <div style={styles.label}>Кто играет</div>
-              <div style={styles.muted}>Можно смешивать людей и компьютеры (2–4 команды)</div>
-            </div>
-            <div style={styles.teamFormations}>
-              {props.teamOrder.map((teamId, index) => {
-                const controller = props.teamControllers[teamId] ?? 'human';
-                const cpuDisabled = teamId === 'team1';
-                const whoMeta = (
-                  <>
-                    {controller === 'cpu' ? (
-                      <>
-                        <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
-                        <div>
-                          <div style={styles.labelMuted}>Сложность компьютера</div>
-                          <CpuDifficultyButtons
-                            value={props.cpuDifficultyByTeam[teamId]}
-                            devUnlocked={devUnlocked}
-                            onPick={(d) => props.onSetCpuDifficultyForTeam(teamId, d)}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div style={styles.muted}>Ходы этой команды делаете вы</div>
-                    )}
-                  </>
-                );
+            {modeGroupId === 'clubs' ? (
+              <div className="setup-nested">
+                <div className="setup-label-row">
+                  <span className="setup-label-muted">Клубы</span>
+                </div>
+                <div className="setup-seg-row">
+                  <button
+                    type="button"
+                    onClick={() => props.onSetMode('clubs')}
+                    className={cn('setup-seg-btn', props.mode === 'clubs' && 'setup-seg-btn--active')}
+                    aria-pressed={props.mode === 'clubs'}
+                  >
+                    Европейские
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => props.onSetMode('rpl')}
+                    className={cn('setup-seg-btn', props.mode === 'rpl' && 'setup-seg-btn--active')}
+                    aria-pressed={props.mode === 'rpl'}
+                  >
+                    РПЛ
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
+            <p className="setup-callout">{SETUP_MODE_GROUP_DESCRIPTIONS[modeGroupId]}</p>
+          </section>
+
+          <section className="setup-section" aria-labelledby="setup-players-heading">
+            <div className="setup-label-row">
+              <h2 id="setup-players-heading" className="setup-label">
+                Количество игроков
+              </h2>
+              <span className="setup-muted">
+                1 — один человек против компьютера (две команды); 2–4 — только люди или смесь с компьютером
+              </span>
+            </div>
+            <div className="setup-seg-row">
+              {SETUP_TEAM_COUNTS.map((count) => {
+                const activeCount = props.gameKind === 'vsCpu' ? 1 : props.teamOrder.length;
                 return (
-                  <div key={teamId} style={isFourPlayerMulti ? styles.teamWhoPlaysBox : styles.teamBox}>
-                    <div style={styles.teamNameDisplay}>Команда {index + 1}</div>
-                    <div style={styles.modeRow}>
-                      <button
-                        type="button"
-                        onClick={() => props.onSetTeamController(teamId, 'human')}
-                        style={{
-                          ...styles.modeBtn,
-                          ...(controller === 'human' ? styles.modeBtnActive : null),
-                        }}
-                        aria-pressed={controller === 'human'}
-                      >
-                        Игрок
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => props.onSetTeamController(teamId, 'cpu')}
-                        disabled={cpuDisabled}
-                        style={{
-                          ...styles.modeBtn,
-                          ...(controller === 'cpu' ? styles.modeBtnActive : null),
-                          ...(cpuDisabled ? { opacity: 0.55, cursor: 'not-allowed' } : null),
-                        }}
-                        aria-pressed={controller === 'cpu'}
-                        title={cpuDisabled ? 'Команда 1 всегда игрок' : 'Компьютер будет ходить автоматически'}
-                      >
-                        Компьютер
-                      </button>
-                    </div>
-                    {isFourPlayerMulti ? (
-                      <div style={styles.teamWhoPlaysMeta}>{whoMeta}</div>
-                    ) : controller === 'cpu' ? (
-                      <>
-                        <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
-                        <div style={{ marginTop: 10 }}>
-                          <div style={styles.labelMuted}>Сложность компьютера</div>
-                          <CpuDifficultyButtons
-                            value={props.cpuDifficultyByTeam[teamId]}
-                            devUnlocked={devUnlocked}
-                            onPick={(d) => props.onSetCpuDifficultyForTeam(teamId, d)}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div style={styles.muted}>Ходы этой команды делаете вы</div>
-                    )}
-                  </div>
+                  <CountButton
+                    key={count}
+                    count={count}
+                    isActive={activeCount === count}
+                    onPick={() => props.onSetTeamCount(count)}
+                  />
                 );
               })}
             </div>
-          </div>
-        ) : null}
+          </section>
 
-        <div style={styles.section}>
-          <div style={styles.labelRow}>
-            <div style={styles.label}>Подсказки</div>
-            <div style={styles.muted}>Можно играть без подсказок или настроить их отдельно</div>
-          </div>
-          <div style={styles.modeRow}>
-            <button
-              type="button"
-              onClick={handleHintsWith}
-              style={{
-                ...styles.modeBtn,
-                ...(hintsEnabled ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={hintsEnabled}
-            >
-              С подсказками
-            </button>
-            <button
-              type="button"
-              onClick={handleHintsWithout}
-              style={{
-                ...styles.modeBtn,
-                ...(!hintsEnabled ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={!hintsEnabled}
-            >
-              Без подсказок
-            </button>
-          </div>
+          {props.gameKind === 'vsCpu' ? (
+            <section className="setup-section" aria-labelledby="setup-cpu-diff-heading">
+              <div className="setup-label-row">
+                <h2 id="setup-cpu-diff-heading" className="setup-label">
+                  Сложность компьютера
+                </h2>
+                <span className="setup-muted">
+                  Влияет на выбор игроков и тренеров по уровню (★).
+                  {devUnlocked
+                    ? ' «Нечестный»: компьютер набирает из общего сильного пула, не из страны или клуба раунда.'
+                    : null}
+                </span>
+              </div>
+              <CpuDifficultyButtons
+                value={props.cpuDifficultyByTeam.team2}
+                devUnlocked={devUnlocked}
+                onPick={(d) => props.onSetCpuDifficultyForTeam('team2', d)}
+              />
+            </section>
+          ) : null}
 
-          {hintsEnabled ? (
-            <div style={styles.hintsPanel}>
+          {props.gameKind === 'multi' ? (
+            <section className="setup-section" aria-labelledby="setup-who-heading">
+              <div className="setup-label-row">
+                <h2 id="setup-who-heading" className="setup-label">
+                  Кто играет
+                </h2>
+                <span className="setup-muted">Можно смешивать людей и компьютеры (2–4 команды)</span>
+              </div>
+              <div
+                className={cn(
+                  'setup-team-grid',
+                  isFourPlayerMulti && 'setup-team-grid--four',
+                )}
+              >
+                {props.teamOrder.map((teamId, index) => {
+                  const controller = props.teamControllers[teamId] ?? 'human';
+                  const cpuDisabled = teamId === 'team1';
+                  const whoMeta = (
+                    <>
+                      {controller === 'cpu' ? (
+                        <>
+                          <div className="setup-muted">Схему выберет компьютер при старте игры</div>
+                          <div>
+                            <div className="setup-label-muted">Сложность компьютера</div>
+                            <CpuDifficultyButtons
+                              value={props.cpuDifficultyByTeam[teamId]}
+                              devUnlocked={devUnlocked}
+                              onPick={(d) => props.onSetCpuDifficultyForTeam(teamId, d)}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="setup-muted">Ходы этой команды делаете вы</div>
+                      )}
+                    </>
+                  );
+
+                  return (
+                    <div
+                      key={teamId}
+                      className={cn('setup-team-box', isFourPlayerMulti && 'setup-team-box--who-four')}
+                    >
+                      <div className="setup-team-name">Команда {index + 1}</div>
+                      <div className="setup-seg-row">
+                        <button
+                          type="button"
+                          onClick={() => props.onSetTeamController(teamId, 'human')}
+                          className={cn('setup-seg-btn', controller === 'human' && 'setup-seg-btn--active')}
+                          aria-pressed={controller === 'human'}
+                        >
+                          Игрок
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onSetTeamController(teamId, 'cpu')}
+                          disabled={cpuDisabled}
+                          className={cn('setup-seg-btn', controller === 'cpu' && 'setup-seg-btn--active')}
+                          aria-pressed={controller === 'cpu'}
+                          title={
+                            cpuDisabled ? 'Команда 1 всегда игрок' : 'Компьютер будет ходить автоматически'
+                          }
+                        >
+                          Компьютер
+                        </button>
+                      </div>
+                      {isFourPlayerMulti ? (
+                        <div className="setup-who-plays-meta">{whoMeta}</div>
+                      ) : controller === 'cpu' ? (
+                        <>
+                          <div className="setup-muted">Схему выберет компьютер при старте игры</div>
+                          <div className="setup-nested">
+                            <div className="setup-label-muted">Сложность компьютера</div>
+                            <CpuDifficultyButtons
+                              value={props.cpuDifficultyByTeam[teamId]}
+                              devUnlocked={devUnlocked}
+                              onPick={(d) => props.onSetCpuDifficultyForTeam(teamId, d)}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="setup-muted">Ходы этой команды делаете вы</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="setup-section" aria-labelledby="setup-hints-heading">
+            <div className="setup-label-row">
+              <h2 id="setup-hints-heading" className="setup-label">
+                Подсказки
+              </h2>
+              <span className="setup-muted">Можно играть без подсказок или настроить их отдельно</span>
+            </div>
+            <div className="setup-seg-row">
               <button
                 type="button"
-                onClick={() => setHintsSettingsOpen((v) => !v)}
-                style={styles.hintsPanelToggle}
-                aria-expanded={hintsSettingsOpen}
+                onClick={handleHintsWith}
+                className={cn('setup-seg-btn', hintsEnabled && 'setup-seg-btn--active')}
+                aria-pressed={hintsEnabled}
               >
-                <span style={styles.hintsPanelChevron} aria-hidden="true">
-                  {hintsSettingsOpen ? '▼' : '▶'}
-                </span>
-                Какие подсказки
+                С подсказками
               </button>
-              {hintsSettingsOpen ? (
-                <div style={styles.hintsPanelBody}>
-                  <div style={styles.hintsFormatRow}>
-                    <div style={styles.hintsFormatCol}>
-                      <div style={styles.labelRow}>
-                        <div style={styles.label}>«Лучший состав» на команду за игру</div>
-                      </div>
-                      <div style={styles.teamCountRow}>
-                        {bestLineupHintBudgetOptions.map((budget) => (
-                          <HintBudgetButton
-                            key={budget}
-                            budget={budget}
-                            isActive={props.hintsBudget === budget}
-                            onPick={() => props.onSetHintsBudget(budget)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {randomHintsSupported ? (
-                    <div style={{ marginTop: 16 }}>
-                      <div style={styles.labelRow}>
-                        <div style={styles.label}>«Случайный игрок» на команду за игру</div>
-                      </div>
-                      <div style={styles.teamCountRow}>
-                        {randomHintBudgetOptions.map((budget) => (
-                          <RandomHintBudgetButton
-                            key={budget}
-                            budget={budget}
-                            isActive={props.randomPlayerHintsBudget === budget}
-                            onPick={() => props.onSetRandomPlayerHintsBudget(budget)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+              <button
+                type="button"
+                onClick={handleHintsWithout}
+                className={cn('setup-seg-btn', !hintsEnabled && 'setup-seg-btn--active')}
+                aria-pressed={!hintsEnabled}
+              >
+                Без подсказок
+              </button>
             </div>
-          ) : null}
+
+            {hintsEnabled ? (
+              <div className="setup-hints-panel">
+                <button
+                  type="button"
+                  onClick={() => setHintsSettingsOpen((v) => !v)}
+                  className="setup-hints-toggle"
+                  aria-expanded={hintsSettingsOpen}
+                >
+                  <span className="setup-hints-chevron" aria-hidden="true">
+                    {hintsSettingsOpen ? '▼' : '▶'}
+                  </span>
+                  Какие подсказки
+                </button>
+                {hintsSettingsOpen ? (
+                  <div className="setup-hints-body">
+                    <div className="setup-hints-cols">
+                      <div className="setup-hints-col">
+                        <div className="setup-label-row">
+                          <span className="setup-label">«Лучший состав» на команду за игру</span>
+                        </div>
+                        <div className="setup-seg-row">
+                          {bestLineupHintBudgetOptions.map((budget) => (
+                            <HintBudgetButton
+                              key={budget}
+                              budget={budget}
+                              isActive={props.hintsBudget === budget}
+                              onPick={() => props.onSetHintsBudget(budget)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {randomHintsSupported ? (
+                      <div className="setup-nested">
+                        <div className="setup-label-row">
+                          <span className="setup-label">«Случайный игрок» на команду за игру</span>
+                        </div>
+                        <div className="setup-seg-row">
+                          {randomHintBudgetOptions.map((budget) => (
+                            <RandomHintBudgetButton
+                              key={budget}
+                              budget={budget}
+                              isActive={props.randomPlayerHintsBudget === budget}
+                              onPick={() => props.onSetRandomPlayerHintsBudget(budget)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="setup-section" aria-labelledby="setup-colors-heading">
+            <div className="setup-label-row">
+              <h2 id="setup-colors-heading" className="setup-label">
+                Цвет команд
+              </h2>
+              <span className="setup-muted">
+                Схему поля выберете после драфта тренера — с подсказкой по приоритету тренера.
+              </span>
+            </div>
+            <div
+              className={cn(
+                'setup-team-grid',
+                isFourPlayerMulti && 'setup-team-grid--four',
+              )}
+            >
+              {props.teamOrder.map((teamId) => {
+                const team = props.teams[teamId];
+                const cpu = isCpuTeam(teamId);
+                const displayTeamName = cpu ? `Нейро ${team.name}` : team.name;
+
+                return (
+                  <TeamBox
+                    key={teamId}
+                    teamName={displayTeamName}
+                    activeFormation={team.formation}
+                    colorScheme={team.colorScheme}
+                    isFormationDisabled
+                    hideFormationPicker
+                    formationDeferredNote="Схему поля выберете на следующем шаге (после тренера)."
+                    narrowLayout={isNarrow}
+                    unifyFourPlayers={isFourPlayerMulti}
+                    cpuDifficulty={cpu ? props.cpuDifficultyByTeam[teamId] : null}
+                    onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
+                    onPickFormation={() => {}}
+                  />
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="setup-section">
+            <div className="setup-actions">
+              <button type="button" onClick={props.onStart} className="setup-primary-btn">
+                Начать игру
+              </button>
+            </div>
+          </section>
+
+          <p className="setup-version">Версия {APP_VERSION}</p>
         </div>
-
-        <div style={styles.section}>
-          <div style={styles.labelRow}>
-            <div style={styles.label}>Цвет команд</div>
-            <div style={styles.muted}>Схему поля выберете после драфта тренера — с подсказкой по приоритету тренера.</div>
-          </div>
-          <div style={styles.teamFormations}>
-            {props.teamOrder.map((teamId) => {
-              const team = props.teams[teamId];
-              const cpu = isCpuTeam(teamId);
-              const displayTeamName = cpu ? `Нейро ${team.name}` : team.name;
-
-              return (
-                <TeamBox
-                  key={teamId}
-                  teamName={displayTeamName}
-                  activeFormation={team.formation}
-                  colorScheme={team.colorScheme}
-                  isFormationDisabled
-                  hideFormationPicker
-                  formationDeferredNote="Схему поля выберете на следующем шаге (после тренера)."
-                  narrowLayout={isNarrow}
-                  unifyFourPlayers={isFourPlayerMulti}
-                  onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
-                  onPickFormation={() => {}}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        <div style={styles.section}>
-          <div style={styles.actions}>
-            <button type="button" onClick={props.onStart} style={styles.primaryBtn}>
-              Начать игру
-            </button>
-          </div>
-        </div>
-
-        <div style={styles.versionFoot}>Версия {APP_VERSION}</div>
       </div>
-    </div>
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
       {devModalOpen ? (
         <div
-          style={styles.devModalOverlay}
+          className="setup-dev-backdrop"
           role="dialog"
           aria-modal="true"
           aria-labelledby="dev-modal-title"
@@ -863,11 +780,11 @@ export function SetupPage(props: SetupPageProps) {
             if (e.target === e.currentTarget) handleDevModalClose();
           }}
         >
-          <div style={styles.devModalCard} onMouseDown={(e) => e.stopPropagation()}>
-            <div id="dev-modal-title" style={styles.devModalTitle}>
+          <div className="setup-dev-card" onMouseDown={(e) => e.stopPropagation()}>
+            <h2 id="dev-modal-title" className="setup-dev-title">
               Режим разработки
-            </div>
-            <div style={styles.devModalSub}>Введите пароль</div>
+            </h2>
+            <p className="setup-dev-sub">Введите пароль</p>
             <input
               type="password"
               value={devPassword}
@@ -875,15 +792,15 @@ export function SetupPage(props: SetupPageProps) {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleDevSubmit();
               }}
-              style={styles.devModalInput}
+              className="setup-dev-input"
               autoFocus
               autoComplete="off"
             />
-            <div style={styles.devModalActions}>
-              <button type="button" onClick={handleDevModalClose} style={styles.devModalBtnGhost}>
+            <div className="setup-dev-actions">
+              <button type="button" onClick={handleDevModalClose} className="setup-dev-btn-ghost">
                 Отмена
               </button>
-              <button type="button" onClick={handleDevSubmit} style={styles.devModalBtnPrimary}>
+              <button type="button" onClick={handleDevSubmit} className="setup-dev-btn-primary">
                 Войти
               </button>
             </div>
@@ -893,259 +810,3 @@ export function SetupPage(props: SetupPageProps) {
     </>
   );
 }
-
-const baseStyles: Record<string, CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    display: 'grid',
-    placeItems: 'center',
-    padding: 24,
-  },
-  card: {
-    width: 'min(980px, 100%)',
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 16,
-    padding: 20,
-    backdropFilter: 'blur(10px)',
-  },
-  headerRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 16,
-    alignItems: 'start',
-    flexWrap: 'wrap',
-  },
-  headerActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    marginLeft: 'auto',
-  },
-  devCheckboxLabel: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 13,
-    fontWeight: 650,
-    opacity: 0.92,
-    cursor: 'pointer',
-    userSelect: 'none',
-    whiteSpace: 'nowrap',
-  },
-  devCheckbox: {
-    width: 16,
-    height: 16,
-    accentColor: '#6ea0ff',
-    cursor: 'pointer',
-  },
-  devModalOverlay: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 10000,
-    display: 'grid',
-    placeItems: 'center',
-    padding: 16,
-    background: 'rgba(0,0,0,0.55)',
-    backdropFilter: 'blur(6px)',
-  },
-  devModalCard: {
-    width: 'min(400px, 100%)',
-    borderRadius: 16,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(18,22,32,0.96)',
-    padding: 18,
-    boxShadow: '0 18px 60px rgba(0,0,0,0.45)',
-  },
-  devModalTitle: { fontSize: 18, fontWeight: 800, letterSpacing: -0.2 },
-  devModalSub: { marginTop: 6, opacity: 0.75, fontSize: 13 },
-  devModalInput: {
-    width: '100%',
-    marginTop: 12,
-    padding: '10px 12px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.35)',
-    color: 'inherit',
-    outline: 'none',
-    boxSizing: 'border-box',
-  },
-  devModalActions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, flexWrap: 'wrap' },
-  devModalBtnGhost: {
-    padding: '9px 12px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'transparent',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-  devModalBtnPrimary: {
-    padding: '9px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(128,168,255,0.8)',
-    background: 'rgba(68,120,255,0.35)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-  rulesBtn: {
-    padding: '9px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'rgba(0,0,0,0.18)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-    fontSize: 14,
-    flexShrink: 0,
-  },
-  h1: { fontSize: 28, fontWeight: 700, letterSpacing: -0.2 },
-  sub: { opacity: 0.85, marginTop: 6 },
-  section: { marginTop: 18 },
-  hintsFormatRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 20,
-    alignItems: 'flex-start',
-  },
-  hintsFormatCol: {
-    flex: '1 1 240px',
-    minWidth: 0,
-  },
-  labelRow: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' },
-  label: { fontWeight: 650 },
-  labelMuted: { fontSize: 12, fontWeight: 650, opacity: 0.8 },
-  modeHelpBox: {
-    marginTop: 10,
-    padding: '12px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.10)',
-    background: 'rgba(0,0,0,0.16)',
-    fontSize: 13,
-    lineHeight: 1.45,
-    opacity: 0.92,
-  },
-  modeRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
-  modeBtn: {
-    padding: '9px 12px',
-    borderRadius: 999,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'rgba(0,0,0,0.18)',
-    color: 'inherit',
-    cursor: 'pointer',
-    opacity: 0.92,
-    fontWeight: 650,
-  },
-  modeBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
-  teamCountRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10 },
-  countBtn: {
-    padding: '8px 12px',
-    borderRadius: 999,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'rgba(0,0,0,0.18)',
-    color: 'inherit',
-    cursor: 'pointer',
-    minWidth: 44,
-    opacity: 0.92,
-    fontWeight: 700,
-  },
-  countBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
-  teamFormations: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 },
-  teamBox: {
-    borderRadius: 16,
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(0,0,0,0.10)',
-    padding: 12,
-  },
-  teamNameDisplay: {
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(0,0,0,0.18)',
-    fontWeight: 700,
-    letterSpacing: -0.2,
-  },
-  schemeRowWithGap: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 12 },
-  schemeBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '8px 10px',
-    borderRadius: 999,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'rgba(0,0,0,0.18)',
-    color: 'inherit',
-    cursor: 'pointer',
-    opacity: 0.92,
-  },
-  schemeBtnActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
-  schemeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    border: '1px solid rgba(0,0,0,0.35)',
-    boxShadow: '0 0 0 2px rgba(255,255,255,0.08) inset',
-  },
-  formationGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 },
-  formationCard: {
-    textAlign: 'left',
-    padding: 10,
-    borderRadius: 14,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.22)',
-    color: 'inherit',
-    cursor: 'pointer',
-  },
-  formationCardActive: { border: '1px solid rgba(128,168,255,0.75)', background: 'rgba(68,120,255,0.18)' },
-  formationCardDisabled: { opacity: 0.6, cursor: 'not-allowed' },
-  formationCardTop: { display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
-  formationName: { fontWeight: 800, letterSpacing: -0.2 },
-  actions: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' },
-  primaryBtn: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(128,168,255,0.8)',
-    background: 'rgba(68,120,255,0.35)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-  muted: { opacity: 0.75, fontSize: 13 },
-  hintsPanel: {
-    marginTop: 12,
-    borderRadius: 14,
-    border: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(0,0,0,0.14)',
-    overflow: 'hidden',
-  },
-  hintsPanelToggle: {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '10px 12px',
-    border: 'none',
-    borderBottom: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(0,0,0,0.12)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 700,
-    fontSize: 14,
-    textAlign: 'left',
-  },
-  hintsPanelChevron: {
-    display: 'inline-flex',
-    width: 18,
-    justifyContent: 'center',
-    opacity: 0.85,
-    fontSize: 12,
-  },
-  hintsPanelBody: {
-    padding: 14,
-  },
-  versionFoot: { marginTop: 16, fontSize: 12, opacity: 0.55, textAlign: 'center' },
-};

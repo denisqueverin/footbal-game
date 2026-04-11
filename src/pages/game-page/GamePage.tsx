@@ -1,12 +1,4 @@
-import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { useMediaQuery } from '@/shared/lib/useMediaQuery';
 
@@ -58,6 +50,7 @@ import { BestLineupModal } from '@/shared/ui/best-lineup-modal';
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 import { RandomPlayerHintModal } from '@/shared/ui/random-player-hint-modal/RandomPlayerHintModal';
 import { RoundIntroModal } from '@/shared/ui/round-intro-modal';
+import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 import { TeamBoard } from '@/shared/ui/team-board';
 
 import { ROUND_MODAL_EXIT_MS, ROUND_MODAL_MS } from './game-page.constants';
@@ -83,8 +76,6 @@ export interface GamePageProps {
 
 export function GamePage(props: GamePageProps) {
   const { state, onConfirmPick, onUseRandomPlayerHint } = props;
-  const isNarrow = useMediaQuery('(max-width: 640px)');
-  const styles = useMemo(() => getGamePageStyles(isNarrow), [isNarrow]);
   const activeTeam = state.turn;
   const gameStateRef = useRef(state);
   gameStateRef.current = state;
@@ -103,6 +94,10 @@ export function GamePage(props: GamePageProps) {
   const [resumeModalEpoch, setResumeModalEpoch] = useState(0);
   const [bestLineupOpen, setBestLineupOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  /** Панель «очередность + время»: по умолчанию свёрнута; развернуть — кнопка «Очередь и время». */
+  const [turnOrderPanelOpen, setTurnOrderPanelOpen] = useState(false);
+  const turnOrderPanelContentId = useId();
+  const isNarrowTurnPanel = useMediaQuery('(max-width: 640px)');
   const roundModalTimersRef = useRef<{ exit?: number; hide?: number }>({});
 
   const clearRoundModalTimers = useCallback(() => {
@@ -807,10 +802,14 @@ export function GamePage(props: GamePageProps) {
   const draftTimePills = state.teamOrder.map((teamId) => {
     const team = state.teams[teamId];
     const ms = getTeamDraftThinkingMs(state, teamId, now);
+    const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
     return (
       <span key={teamId} className="game-turn-order-draft-time-pill">
         <span className="game-turn-order-draft-time-name" style={{ color: schemeAccent(team.colorScheme) }}>
           {team.name}
+          {cpuDiff != null ? (
+            <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-order-draft-time-diff" />
+          ) : null}
         </span>
         <span className="game-turn-order-draft-time-val">{formatDraftDuration(ms)}</span>
       </span>
@@ -818,7 +817,7 @@ export function GamePage(props: GamePageProps) {
   });
 
   return (
-    <div style={styles.page}>
+    <div className="game-shell">
       <BestLineupModal
         open={bestLineupOpen}
         onClose={() => setBestLineupOpen(false)}
@@ -848,109 +847,211 @@ export function GamePage(props: GamePageProps) {
         position={state.randomPlayerHintError?.position ?? ''}
         onClose={props.onClearRandomPlayerHintError}
       />
-      <div style={styles.topbar}>
-        <div style={styles.topbarLeft}>
-          <div style={styles.title}>
+      <header className="game-topbar">
+        <div className="game-topbar-left">
+          <p className="game-source-label">
             {isChaosMode(state.mode)
               ? 'Текущий источник'
               : isClubsMode(state.mode)
                 ? 'Текущий клуб'
                 : 'Текущая страна'}
-          </div>
-          <div style={styles.countryRow}>
-            <div style={styles.country}>
-              <b>{state.currentCountry ?? '—'}</b>
-            </div>
+          </p>
+          <div className="game-source-value">
+            <p className="game-source-name">{state.currentCountry ?? '—'}</p>
             {currentSourceFlagUrl ? (
-              <img src={currentSourceFlagUrl} alt="" style={styles.topbarFlag} width={36} height={24} />
+              <img src={currentSourceFlagUrl} alt="" className="game-topbar-flag" width={36} height={24} />
             ) : null}
           </div>
         </div>
 
-        <div style={styles.topbarCenter} aria-live="polite">
-          <div style={styles.timerCaption}>Время игры</div>
-          <div style={styles.timerValue}>{draftTimerLabel}</div>
+        <div className="game-topbar-center" aria-live="polite">
+          <p className="game-timer-cap">Время игры</p>
+          <p className="game-timer-val">{draftTimerLabel}</p>
         </div>
 
-        <div style={styles.topbarRight}>
-          {!isEditingLineups ? <span style={styles.versionTag}>v{APP_VERSION}</span> : null}
+        <div className="game-topbar-right">
+          {!isEditingLineups ? <span className="game-version-tag">v{APP_VERSION}</span> : null}
           <button
             type="button"
             onClick={handleToggleEditLineups}
-            style={isEditingLineups ? styles.editBtnFinish : styles.ghostBtn}
+            className={isEditingLineups ? 'game-edit-done-btn' : 'game-ghost-btn'}
           >
             {isEditingLineups ? 'Завершить редактирование' : 'Редактировать составы'}
           </button>
-          <button type="button" onClick={handleResetClick} style={styles.ghostBtn}>
+          <button type="button" onClick={handleResetClick} className="game-ghost-btn">
             Новая игра
           </button>
         </div>
-      </div>
+      </header>
 
       {!isEditingLineups && roundTurnSequence.length > 0 ? (
-        <div className="game-turn-order" aria-label="Очерёдность ходов в раундах">
-          <div className="game-turn-order-layout">
-            <div className="game-turn-order-main">
-              <div className="game-turn-order-rounds-row">
-                <div className="game-turn-order-segment">
-                  <div className="game-turn-order-label">
-                    Раунд {state.roundIndex} — очередность ходов
-                  </div>
-                  <div className="game-turn-order-chips">
+        <section
+          className={`game-turn-order${turnOrderPanelOpen ? ' game-turn-order--open' : ' game-turn-order--closed'}`}
+          aria-label="Очерёдность ходов и время по командам"
+        >
+          <div className="game-turn-order-bar">
+            <div className="game-turn-order-summary" aria-live="polite">
+              <span className="game-turn-order-summary-round">Раунд {state.roundIndex}</span>
+              <span className="game-turn-order-summary-sep" aria-hidden="true">
+                ·
+              </span>
+              <span className="game-turn-order-summary-turn">
+                Ход: <strong>{state.teams[state.turn].name}</strong>
+                {isCpuControlledTeam(state, state.turn) ? (
+                  <CpuDifficultyIcon
+                    difficulty={state.cpuDifficultyByTeam[state.turn]}
+                    className="game-turn-order-summary-diff"
+                  />
+                ) : null}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="game-turn-order-toggle"
+              aria-expanded={turnOrderPanelOpen}
+              aria-controls={turnOrderPanelContentId}
+              onClick={() => setTurnOrderPanelOpen((v) => !v)}
+            >
+              {turnOrderPanelOpen ? 'Свернуть' : 'Очередь и время'}
+            </button>
+          </div>
+          <div
+            id={turnOrderPanelContentId}
+            className="game-turn-order-body"
+            hidden={!turnOrderPanelOpen}
+          >
+            {isNarrowTurnPanel ? (
+              <div className="game-turn-order-narrow">
+                <div className="game-turn-order-narrow-block">
+                  <div className="game-turn-order-narrow-round">Раунд {state.roundIndex}</div>
+                  <p className="game-turn-order-narrow-order">
+                    <span className="game-turn-order-narrow-kicker">Ход: </span>
                     {roundTurnSequence.map((teamId, index) => {
                       const team = state.teams[teamId];
                       const isActive = state.turn === teamId;
+                      const sep = index > 0 ? ' - ' : null;
+                      const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
 
                       return (
-                        <span
-                          key={`${state.roundIndex}-${teamId}-${index}`}
-                          className={`game-turn-chip${isActive ? ' game-turn-chip--active' : ''}`}
-                          style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
-                        >
-                          <span className="game-turn-chip-num">{index + 1}</span>
-                          {team.name}
+                        <span key={`${state.roundIndex}-${teamId}-${index}`}>
+                          {sep}
+                          <span className="game-turn-order-name-with-diff">
+                            {isActive ? <strong>{team.name}</strong> : team.name}
+                            {cpuDiff != null ? (
+                              <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-order-inline-diff" />
+                            ) : null}
+                          </span>
                         </span>
                       );
                     })}
-                  </div>
+                  </p>
                 </div>
                 {nextRoundTurnSequence.length > 0 ? (
-                  <div className="game-turn-order-segment game-turn-order-segment--next">
-                    <div className="game-turn-order-label game-turn-order-label--next">
-                      Следующий раунд — очередность ходов
+                  <div className="game-turn-order-narrow-block game-turn-order-narrow-block--next">
+                    <div className="game-turn-order-narrow-round game-turn-order-narrow-round--next">
+                      Следующий раунд {state.roundIndex + 1}
                     </div>
-                    <div className="game-turn-order-chips game-turn-order-chips--muted">
+                    <p className="game-turn-order-narrow-order game-turn-order-narrow-order--next">
+                      <span className="game-turn-order-narrow-kicker">Ход: </span>
                       {nextRoundTurnSequence.map((teamId, index) => {
                         const team = state.teams[teamId];
+                        const sep = index > 0 ? ' - ' : null;
+                        const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
 
                         return (
-                          <span
-                            key={`next-${state.roundIndex + 1}-${teamId}-${index}`}
-                            className="game-turn-chip game-turn-chip--next-preview"
-                            style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
-                          >
-                            <span className="game-turn-chip-num">{index + 1}</span>
-                            {team.name}
+                          <span key={`next-${state.roundIndex + 1}-${teamId}-${index}`}>
+                            {sep}
+                            <span className="game-turn-order-name-with-diff">
+                              {team.name}
+                              {cpuDiff != null ? (
+                                <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-order-inline-diff" />
+                              ) : null}
+                            </span>
                           </span>
                         );
                       })}
-                    </div>
+                    </p>
                   </div>
                 ) : null}
+                <div className="game-turn-order-narrow-times" aria-label="Время на ходах по командам">
+                  {draftTimePills}
+                </div>
               </div>
-            </div>
-            <div className="game-turn-order-times" aria-label="Время на ходах по командам">
-              {draftTimePills}
-            </div>
+            ) : (
+              <div className="game-turn-order-layout">
+                <div className="game-turn-order-main">
+                  <div className="game-turn-order-rounds-row">
+                    <div className="game-turn-order-segment">
+                      <div className="game-turn-order-label">Раунд {state.roundIndex} — очередность ходов</div>
+                      <div className="game-turn-order-chips">
+                        {roundTurnSequence.map((teamId, index) => {
+                          const team = state.teams[teamId];
+                          const isActive = state.turn === teamId;
+                          const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
+
+                          return (
+                            <span
+                              key={`${state.roundIndex}-${teamId}-${index}`}
+                              className={`game-turn-chip${isActive ? ' game-turn-chip--active' : ''}`}
+                              style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
+                            >
+                              <span className="game-turn-chip-num">{index + 1}</span>
+                              <span className="game-turn-chip-name-row">
+                                {team.name}
+                                {cpuDiff != null ? (
+                                  <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-chip-diff" />
+                                ) : null}
+                              </span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {nextRoundTurnSequence.length > 0 ? (
+                      <div className="game-turn-order-segment game-turn-order-segment--next">
+                        <div className="game-turn-order-label game-turn-order-label--next">
+                          Следующий раунд — очередность ходов
+                        </div>
+                        <div className="game-turn-order-chips game-turn-order-chips--muted">
+                          {nextRoundTurnSequence.map((teamId, index) => {
+                            const team = state.teams[teamId];
+                            const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
+
+                            return (
+                              <span
+                                key={`next-${state.roundIndex + 1}-${teamId}-${index}`}
+                                className="game-turn-chip game-turn-chip--next-preview"
+                                style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
+                              >
+                                <span className="game-turn-chip-num">{index + 1}</span>
+                                <span className="game-turn-chip-name-row">
+                                  {team.name}
+                                  {cpuDiff != null ? (
+                                    <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-chip-diff" />
+                                  ) : null}
+                                </span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="game-turn-order-times" aria-label="Время на ходах по командам">
+                  {draftTimePills}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        </section>
       ) : null}
 
       {isEditingLineups ? (
         <LineupEditor state={state} onPickNameChange={handleLineupPickNameChange} />
       ) : (
         <>
-          <div style={styles.bottom}>
+          <div className="game-bottom">
             {roundTurnSequence.length === 0 ? (
               <div
                 className="game-turn-order-draft-times game-turn-order-draft-times--in-bottom"
@@ -959,16 +1060,16 @@ export function GamePage(props: GamePageProps) {
                 {draftTimePills}
               </div>
             ) : null}
-            <div style={styles.formRow}>
+            <div className="game-form-row">
               <input
                 value={playerName}
                 onChange={handlePlayerNameChange}
                 onKeyDown={handlePlayerNameKeyDown}
                 placeholder={isCpuActiveTurn ? 'Ход компьютера…' : 'Имя футболиста (свободный ввод)'}
-                style={styles.input}
+                className="game-input"
                 disabled={isCpuActiveTurn}
               />
-              <div style={styles.slotPreview}>
+              <div className="game-slot-preview">
                 Слот: <b>{slotId ?? 'не выбран'}</b>
               </div>
               {state.mode === 'nationalTop15' ||
@@ -980,10 +1081,7 @@ export function GamePage(props: GamePageProps) {
                   type="button"
                   onClick={handleUseRandomHint}
                   disabled={!canUseRandomHint}
-                  style={{
-                    ...styles.randomHintBtn,
-                    ...(!canUseRandomHint ? styles.randomHintBtnDisabled : null),
-                  }}
+                  className="game-random-hint-btn"
                   title={
                     canUseRandomHint
                       ? 'Поставить случайного игрока этой позиции из текущей сборной'
@@ -1005,22 +1103,19 @@ export function GamePage(props: GamePageProps) {
                 type="button"
                 onClick={handleConfirmPick}
                 disabled={!canConfirm}
-                style={{
-                  ...styles.primaryBtn,
-                  ...(!canConfirm ? styles.primaryBtnDisabled : null),
-                }}
+                className="game-confirm-btn"
               >
                 Подтвердить
               </button>
             </div>
-            <div style={styles.hint}>
+            <p className="game-hint">
               Выберите свободный слот на поле ниже и введите имя игрока, затем нажмите «Подтвердить».
-            </div>
+            </p>
           </div>
-          <div style={styles.draftMain}>
-            <div style={styles.boards}>
+          <div className="game-draft-main">
+            <div className="game-boards">
               {state.teamOrder.map((teamId) => (
-                <div key={teamId} style={styles.side}>
+                <div key={teamId} className="game-side">
                   <TeamBoard
                     team={state.teams[teamId]}
                     formation={state.teams[teamId].formation}
@@ -1028,6 +1123,9 @@ export function GamePage(props: GamePageProps) {
                     selectedSlotId={activeTeam === teamId ? slotId : null}
                     onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
                     disabled={activeTeam !== teamId}
+                    cpuDifficulty={
+                      isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null
+                    }
                     pendingPick={
                       state.teamControllers?.[teamId] === 'cpu' &&
                       state.turn === teamId &&
@@ -1051,7 +1149,7 @@ export function GamePage(props: GamePageProps) {
                         : null
                     }
                   />
-                  {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
+                  {activeTeam !== teamId ? <div className="game-side-overlay" aria-hidden="true" /> : null}
                 </div>
               ))}
             </div>
@@ -1060,194 +1158,12 @@ export function GamePage(props: GamePageProps) {
       )}
 
       {isEditingLineups ? (
-        <div style={styles.bottomHintOnly}>
-          <div style={styles.hint}>
+        <div className="game-bottom-hint-only">
+          <p className="game-hint">
             Редактируйте имена в списке выше и нажмите «Завершить редактирование», чтобы продолжить игру.
-          </div>
+          </p>
         </div>
       ) : null}
     </div>
   );
-}
-
-function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
-  return {
-  page: { minHeight: '100dvh', display: 'flex', flexDirection: 'column' },
-  topbar: {
-    display: 'grid',
-    gridTemplateColumns: isNarrow ? '1fr' : '1fr auto 1fr',
-    alignItems: 'center',
-    gap: isNarrow ? 14 : 12,
-    padding: isNarrow ? 'max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left))' : '16px 18px',
-    borderBottom: '1px solid rgba(255,255,255,0.12)',
-    background: 'rgba(255,255,255,0.04)',
-    backdropFilter: 'blur(10px)',
-    textAlign: isNarrow ? 'center' : undefined,
-  },
-  topbarLeft: isNarrow ? { minWidth: 0, justifySelf: 'center' } : { minWidth: 0 },
-  topbarCenter: {
-    textAlign: 'center',
-    justifySelf: 'center',
-  },
-  timerCaption: {
-    fontSize: 11,
-    fontWeight: 750,
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    opacity: 0.65,
-  },
-  timerValue: {
-    fontSize: 22,
-    fontWeight: 800,
-    fontVariantNumeric: 'tabular-nums',
-    color: '#b8e0ff',
-    textShadow: '0 0 20px rgba(100, 180, 255, 0.25)',
-    marginTop: 2,
-  },
-  title: { fontWeight: 750, letterSpacing: -0.2 },
-  countryRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 6,
-    minWidth: 0,
-    flexWrap: 'wrap',
-  },
-  topbarFlag: {
-    flexShrink: 0,
-    borderRadius: 4,
-    border: '1px solid rgba(0,0,0,0.35)',
-    objectFit: 'cover',
-  },
-  country: { opacity: 0.9 },
-  topbarRight: {
-    display: 'flex',
-    gap: isNarrow ? 8 : 12,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    justifyContent: isNarrow ? 'center' : 'end',
-    justifySelf: isNarrow ? 'center' : 'end',
-    width: isNarrow ? '100%' : undefined,
-  },
-  ghostBtn: {
-    padding: '8px 10px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.18)',
-    background: 'transparent',
-    color: 'inherit',
-    cursor: 'pointer',
-    opacity: 0.85,
-  },
-  /** Яркая кнопка выхода из режима редактирования (вход — обычный ghost, как «Новая игра»). */
-  editBtnFinish: {
-    padding: '9px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(120, 220, 160, 0.5)',
-    background: 'linear-gradient(180deg, rgba(80, 200, 130, 0.95) 0%, rgba(30, 120, 75, 0.95) 100%)',
-    color: '#f4fff8',
-    cursor: 'pointer',
-    fontWeight: 750,
-    boxShadow: '0 2px 14px rgba(60, 200, 120, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-  },
-  draftMain: {
-    flex: '1 1 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
-  },
-  boards: {
-    flex: '1 1 auto',
-    minHeight: 0,
-    maxHeight: isNarrow
-      ? 'calc(100dvh - min(300px, 58dvh))'
-      : 'calc(100dvh - min(320px, 46dvh))',
-    overflow: 'auto',
-    display: 'grid',
-    gridTemplateColumns: isNarrow
-      ? '1fr'
-      : 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
-    gap: isNarrow ? 10 : 12,
-    padding: isNarrow
-      ? '8px max(8px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left))'
-      : '10px 12px max(12px, env(safe-area-inset-bottom)) 12px',
-    alignItems: 'stretch',
-  },
-  side: {
-    position: 'relative',
-    minHeight: 0,
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  overlay: {
-    position: 'absolute',
-    inset: 0,
-    background: 'rgba(0,0,0,0.55)',
-    border: '1px solid rgba(255,255,255,0.10)',
-    borderRadius: 16,
-    pointerEvents: 'auto',
-  },
-  bottom: {
-    borderBottom: '1px solid rgba(255,255,255,0.12)',
-    padding: isNarrow
-      ? '12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left))'
-      : '14px 18px',
-    background: 'rgba(255,255,255,0.04)',
-    backdropFilter: 'blur(10px)',
-    flexShrink: 0,
-  },
-  bottomHintOnly: {
-    borderTop: '1px solid rgba(255,255,255,0.12)',
-    padding: isNarrow
-      ? '12px max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))'
-      : '12px 18px 16px',
-    background: 'rgba(255,255,255,0.03)',
-    backdropFilter: 'blur(10px)',
-  },
-  formRow: {
-    display: 'flex',
-    gap: 10,
-    alignItems: isNarrow ? 'stretch' : 'center',
-    marginTop: 0,
-    flexWrap: 'wrap',
-    flexDirection: isNarrow ? 'column' : 'row',
-  },
-  input: {
-    flex: isNarrow ? '1 1 auto' : '1 1 320px',
-    width: isNarrow ? '100%' : undefined,
-    minWidth: isNarrow ? 0 : 260,
-    maxWidth: isNarrow ? '100%' : undefined,
-    padding: '10px 12px',
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.24)',
-    color: 'inherit',
-    outline: 'none',
-  },
-  slotPreview: { opacity: 0.9 },
-  primaryBtn: {
-    padding: '10px 14px',
-    borderRadius: 12,
-    border: '1px solid rgba(128,168,255,0.8)',
-    background: 'rgba(68,120,255,0.35)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 650,
-  },
-  primaryBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
-  randomHintBtn: {
-    padding: '10px 12px',
-    borderRadius: 12,
-    border: '1px solid rgba(232, 197, 71, 0.45)',
-    background: 'rgba(0,0,0,0.18)',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontWeight: 700,
-    fontSize: 13,
-    whiteSpace: 'nowrap',
-  },
-  randomHintBtnDisabled: { opacity: 0.55, cursor: 'not-allowed' },
-  hint: { marginTop: 8, opacity: 0.75, fontSize: 13 },
-  versionTag: { fontSize: 12, opacity: 0.55, marginRight: 4 },
-  };
 }
