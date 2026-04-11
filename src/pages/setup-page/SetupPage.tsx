@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from 'react';
 
 import { useMediaQuery } from '@/shared/lib/useMediaQuery';
 
@@ -24,7 +30,7 @@ import { schemeDotColor } from '@/shared/lib/schemeAccent';
 import { APP_VERSION } from '@/shared/config/version';
 
 import {
-  SETUP_BEST_LINEUP_BENCH_OPTIONS,
+  DEV_MODE_PASSWORD,
   SETUP_HINT_BUDGETS,
   SETUP_MODE_GROUP_DESCRIPTIONS,
   SETUP_RANDOM_PLAYER_HINT_BUDGETS,
@@ -47,14 +53,12 @@ export interface SetupPageProps {
   onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void;
   onSetTeamCount: (count: TeamCount) => void;
   onSetMode: (mode: GameMode) => void;
-  onSetGameKind: (gameKind: GameKind) => void;
   onSetCpuDifficulty: (difficulty: CpuDifficulty) => void;
   hintsBudget: HintsBudget;
   onSetHintsBudget: (budget: HintsBudget) => void;
   randomPlayerHintsBudget: RandomPlayerHintsBudget;
   onSetRandomPlayerHintsBudget: (budget: RandomPlayerHintsBudget) => void;
-  bestLineupIncludeBench: boolean;
-  onSetBestLineupIncludeBench: (includeBench: boolean) => void;
+  onApplyDevPreset: () => void;
   onStart: () => void;
 }
 
@@ -202,6 +206,9 @@ function TeamBox(props: TeamBoxProps) {
 export function SetupPage(props: SetupPageProps) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [hintsSettingsOpen, setHintsSettingsOpen] = useState(true);
+  const [devUnlocked, setDevUnlocked] = useState(false);
+  const [devModalOpen, setDevModalOpen] = useState(false);
+  const [devPassword, setDevPassword] = useState('');
   const isNarrow = useMediaQuery('(max-width: 640px)');
   const styles = useMemo((): typeof baseStyles => {
     return {
@@ -254,6 +261,33 @@ export function SetupPage(props: SetupPageProps) {
     return props.teamOrder.some((id) => isCpuTeam(id));
   }, [isCpuTeam, props.teamOrder]);
 
+  /** «11» доступно только в режиме разработки; обычным игрокам — только 1–3. */
+  const randomHintBudgetOptions = useMemo((): RandomPlayerHintsBudget[] => {
+    const base: RandomPlayerHintsBudget[] = [...SETUP_RANDOM_PLAYER_HINT_BUDGETS];
+    if (devUnlocked) base.push(11);
+    return base;
+  }, [devUnlocked]);
+
+  const bestLineupHintBudgetOptions = useMemo((): HintsBudget[] => {
+    const base: HintsBudget[] = [...SETUP_HINT_BUDGETS];
+    if (devUnlocked) base.push(11);
+    return base;
+  }, [devUnlocked]);
+
+  useEffect(() => {
+    if (devUnlocked) return;
+    if (props.randomPlayerHintsBudget === 11) {
+      props.onSetRandomPlayerHintsBudget(3);
+    }
+  }, [devUnlocked, props.randomPlayerHintsBudget, props.onSetRandomPlayerHintsBudget]);
+
+  useEffect(() => {
+    if (devUnlocked) return;
+    if (props.hintsBudget === 11) {
+      props.onSetHintsBudget(3);
+    }
+  }, [devUnlocked, props.hintsBudget, props.onSetHintsBudget]);
+
   const handleHintsWith = () => {
     if (!hintsEnabled) {
       props.onSetHintsBudget(1);
@@ -268,6 +302,52 @@ export function SetupPage(props: SetupPageProps) {
     setHintsSettingsOpen(false);
   };
 
+  const handleDevCheckboxChange = useCallback(() => {
+    // Чекбокс контролируемый (checked={devUnlocked}), поэтому полагаемся на текущее состояние,
+    // а не на event.target.checked (оно может быть неконсистентно при мгновенном откате UI).
+    if (!devUnlocked) {
+      setDevPassword('');
+      setDevModalOpen(true);
+      return;
+    }
+    setDevUnlocked(false);
+  }, [devUnlocked]);
+
+  const handleDevModalClose = useCallback(() => {
+    setDevModalOpen(false);
+    setDevPassword('');
+  }, []);
+
+  const handleDevSubmit = useCallback(() => {
+    if (devPassword.trim() === DEV_MODE_PASSWORD) {
+      props.onApplyDevPreset();
+      setDevUnlocked(true);
+      setDevModalOpen(false);
+      setDevPassword('');
+      setHintsSettingsOpen(true);
+      return;
+    }
+    setDevPassword('');
+  }, [devPassword, props]);
+
+  useEffect(() => {
+    if (!devModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleDevModalClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [devModalOpen, handleDevModalClose]);
+
+  useEffect(() => {
+    if (!devModalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [devModalOpen]);
+
   return (
     <>
       <div style={styles.page}>
@@ -276,12 +356,23 @@ export function SetupPage(props: SetupPageProps) {
           <div>
             <div style={styles.h1}>Футбольный драфт</div>
             <div style={styles.sub}>
-              Выберите режим и количество игроков, затем настройте команды и начните игру.
+              Выберите режим драфта и сколько людей играет (1 — против компьютера), затем настройте команды и начните игру.
             </div>
           </div>
-          <button type="button" onClick={() => setRulesOpen(true)} style={styles.rulesBtn}>
-            Правила
-          </button>
+          <div style={styles.headerActions}>
+            <label style={styles.devCheckboxLabel}>
+              <input
+                type="checkbox"
+                checked={devUnlocked}
+                onChange={handleDevCheckboxChange}
+                style={styles.devCheckbox}
+              />
+              Режим разработки
+            </label>
+            <button type="button" onClick={() => setRulesOpen(true)} style={styles.rulesBtn}>
+              Правила
+            </button>
+          </div>
         </div>
 
         <div style={styles.section}>
@@ -323,7 +414,6 @@ export function SetupPage(props: SetupPageProps) {
               Хаос
             </button>
           </div>
-          <div style={styles.modeHelpBox}>{SETUP_MODE_GROUP_DESCRIPTIONS[modeGroupId]}</div>
 
           {modeGroupId === 'nations' ? (
             <div style={{ marginTop: 12 }}>
@@ -388,58 +478,29 @@ export function SetupPage(props: SetupPageProps) {
               </div>
             </div>
           ) : null}
+
+          <div style={styles.modeHelpBox}>{SETUP_MODE_GROUP_DESCRIPTIONS[modeGroupId]}</div>
         </div>
 
         <div style={styles.section}>
           <div style={styles.labelRow}>
-            <div style={styles.label}>Режим партии</div>
-            <div style={styles.muted}>
-              «Против компьютера» фиксирует 2 команды, схема компьютера выбирается случайно
-            </div>
+            <div style={styles.label}>Количество игроков</div>
+            <div style={styles.muted}>1 — один человек против компьютера (две команды); 2–4 — только люди или смесь с компьютером</div>
           </div>
-          <div style={styles.modeRow}>
-            <button
-              type="button"
-              onClick={() => props.onSetGameKind('vsCpu')}
-              style={{
-                ...styles.modeBtn,
-                ...(props.gameKind === 'vsCpu' ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={props.gameKind === 'vsCpu'}
-            >
-              Против компьютера (1 игрок)
-            </button>
-            <button
-              type="button"
-              onClick={() => props.onSetGameKind('multi')}
-              style={{
-                ...styles.modeBtn,
-                ...(props.gameKind === 'multi' ? styles.modeBtnActive : null),
-              }}
-              aria-pressed={props.gameKind === 'multi'}
-            >
-              Несколько игроков
-            </button>
-          </div>
-        </div>
-
-        {props.gameKind === 'multi' ? (
-          <div style={styles.section}>
-            <div style={styles.labelRow}>
-              <div style={styles.label}>Количество игроков</div>
-            </div>
-            <div style={styles.teamCountRow}>
-              {SETUP_TEAM_COUNTS.map((count) => (
+          <div style={styles.teamCountRow}>
+            {SETUP_TEAM_COUNTS.map((count) => {
+              const activeCount = props.gameKind === 'vsCpu' ? 1 : props.teamOrder.length;
+              return (
                 <CountButton
                   key={count}
                   count={count}
-                  isActive={props.teamOrder.length === count}
+                  isActive={activeCount === count}
                   onPick={() => props.onSetTeamCount(count)}
                 />
-              ))}
-            </div>
+              );
+            })}
           </div>
-        ) : null}
+        </div>
 
         {props.gameKind === 'multi' ? (
           <div style={styles.section}>
@@ -497,7 +558,9 @@ export function SetupPage(props: SetupPageProps) {
           <div style={styles.section}>
             <div style={styles.labelRow}>
               <div style={styles.label}>Сложность компьютера</div>
-              <div style={styles.muted}>Влияет на выбор игроков по уровню (★)</div>
+              <div style={styles.muted}>
+                Влияет на выбор игроков по уровню (★). «Нечестный» — компьютер набирает из общего сильного пула, не из страны или клуба раунда
+              </div>
             </div>
             <div style={styles.modeRow}>
               <button
@@ -532,6 +595,17 @@ export function SetupPage(props: SetupPageProps) {
                 aria-pressed={props.cpuDifficulty === 'hard'}
               >
                 Хард
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onSetCpuDifficulty('unfair')}
+                style={{
+                  ...styles.modeBtn,
+                  ...(props.cpuDifficulty === 'unfair' ? styles.modeBtnActive : null),
+                }}
+                aria-pressed={props.cpuDifficulty === 'unfair'}
+              >
+                Нечестный
               </button>
             </div>
           </div>
@@ -588,7 +662,7 @@ export function SetupPage(props: SetupPageProps) {
                         <div style={styles.label}>«Лучший состав» на команду за игру</div>
                       </div>
                       <div style={styles.teamCountRow}>
-                        {SETUP_HINT_BUDGETS.map((budget) => (
+                        {bestLineupHintBudgetOptions.map((budget) => (
                           <HintBudgetButton
                             key={budget}
                             budget={budget}
@@ -598,37 +672,15 @@ export function SetupPage(props: SetupPageProps) {
                         ))}
                       </div>
                     </div>
-                    <div style={styles.hintsFormatCol}>
-                      <div style={styles.labelRow}>
-                        <div style={styles.label}>Формат «Лучший состав»</div>
-                      </div>
-                      <div style={styles.modeRow}>
-                        {SETUP_BEST_LINEUP_BENCH_OPTIONS.map((option) => (
-                          <button
-                            key={String(option.includeBench)}
-                            type="button"
-                            onClick={() => props.onSetBestLineupIncludeBench(option.includeBench)}
-                            style={{
-                              ...styles.modeBtn,
-                              ...(props.bestLineupIncludeBench === option.includeBench ? styles.modeBtnActive : null),
-                            }}
-                            aria-pressed={props.bestLineupIncludeBench === option.includeBench}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
                   </div>
 
                   {randomHintsSupported ? (
                     <div style={{ marginTop: 16 }}>
                       <div style={styles.labelRow}>
                         <div style={styles.label}>«Случайный игрок» на команду за игру</div>
-                        <div style={styles.muted}>0 — не использовать эту подсказку</div>
                       </div>
                       <div style={styles.teamCountRow}>
-                        {SETUP_RANDOM_PLAYER_HINT_BUDGETS.map((budget) => (
+                        {randomHintBudgetOptions.map((budget) => (
                           <RandomHintBudgetButton
                             key={budget}
                             budget={budget}
@@ -685,6 +737,43 @@ export function SetupPage(props: SetupPageProps) {
       </div>
     </div>
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      {devModalOpen ? (
+        <div
+          style={styles.devModalOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dev-modal-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) handleDevModalClose();
+          }}
+        >
+          <div style={styles.devModalCard} onMouseDown={(e) => e.stopPropagation()}>
+            <div id="dev-modal-title" style={styles.devModalTitle}>
+              Режим разработки
+            </div>
+            <div style={styles.devModalSub}>Введите пароль</div>
+            <input
+              type="password"
+              value={devPassword}
+              onChange={(e) => setDevPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleDevSubmit();
+              }}
+              style={styles.devModalInput}
+              autoFocus
+              autoComplete="off"
+            />
+            <div style={styles.devModalActions}>
+              <button type="button" onClick={handleDevModalClose} style={styles.devModalBtnGhost}>
+                Отмена
+              </button>
+              <button type="button" onClick={handleDevSubmit} style={styles.devModalBtnPrimary}>
+                Войти
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -710,6 +799,81 @@ const baseStyles: Record<string, CSSProperties> = {
     gap: 16,
     alignItems: 'start',
     flexWrap: 'wrap',
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    marginLeft: 'auto',
+  },
+  devCheckboxLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 650,
+    opacity: 0.92,
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+  },
+  devCheckbox: {
+    width: 16,
+    height: 16,
+    accentColor: '#6ea0ff',
+    cursor: 'pointer',
+  },
+  devModalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 10000,
+    display: 'grid',
+    placeItems: 'center',
+    padding: 16,
+    background: 'rgba(0,0,0,0.55)',
+    backdropFilter: 'blur(6px)',
+  },
+  devModalCard: {
+    width: 'min(400px, 100%)',
+    borderRadius: 16,
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(18,22,32,0.96)',
+    padding: 18,
+    boxShadow: '0 18px 60px rgba(0,0,0,0.45)',
+  },
+  devModalTitle: { fontSize: 18, fontWeight: 800, letterSpacing: -0.2 },
+  devModalSub: { marginTop: 6, opacity: 0.75, fontSize: 13 },
+  devModalInput: {
+    width: '100%',
+    marginTop: 12,
+    padding: '10px 12px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'rgba(0,0,0,0.35)',
+    color: 'inherit',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  devModalActions: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14, flexWrap: 'wrap' },
+  devModalBtnGhost: {
+    padding: '9px 12px',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: 'transparent',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontWeight: 650,
+  },
+  devModalBtnPrimary: {
+    padding: '9px 14px',
+    borderRadius: 12,
+    border: '1px solid rgba(128,168,255,0.8)',
+    background: 'rgba(68,120,255,0.35)',
+    color: 'inherit',
+    cursor: 'pointer',
+    fontWeight: 650,
   },
   rulesBtn: {
     padding: '9px 14px',

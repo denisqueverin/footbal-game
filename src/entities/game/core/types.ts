@@ -1,10 +1,11 @@
 import type { FormationId } from './formations'
 
 export type TeamId = 'team1' | 'team2' | 'team3' | 'team4'
-export type TeamCount = 2 | 3 | 4
+/** Сколько людей за столом: 1 = вы против компьютера (2 команды). */
+export type TeamCount = 1 | 2 | 3 | 4
 
-/** Сколько подсказок «Лучший состав» у каждой команды за всю игру (выбор в меню). 0 — подсказки выключены. */
-export type HintsBudget = 0 | 1 | 2 | 3
+/** Сколько подсказок «Лучший состав» у каждой команды за всю игру (выбор в меню). 0 — выключено; 11 — только режим разработки. */
+export type HintsBudget = 0 | 1 | 2 | 3 | 11
 
 /** Сколько подсказок «Случайный игрок» у каждой команды за всю игру. 0 — подсказки выключены. */
 export type RandomPlayerHintsBudget = 0 | 1 | 2 | 3 | 11
@@ -14,7 +15,8 @@ export type GamePhase = 'setup' | 'drawReveal' | 'drafting' | 'finished'
 /** Формат партии: обычная (несколько людей) или против компьютера (1 игрок). */
 export type GameKind = 'multi' | 'vsCpu'
 
-export type CpuDifficulty = 'beginner' | 'normal' | 'hard'
+/** «Нечестный» — компьютер набирает из общего сильного пула, не из источника раунда. */
+export type CpuDifficulty = 'beginner' | 'normal' | 'hard' | 'unfair'
 
 export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'chaos'
 
