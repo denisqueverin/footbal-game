@@ -29,7 +29,7 @@ export type CoachAssignment = {
 export type CoachDraftPhaseState = {
   step: 'eliminate' | 'pick'
   pools: Record<TeamId, CoachAssignment[]>
-  /** Глобальный шаг снятия: убирает order[k%n] у order[(k+1)%n], всего 3·N шагов. */
+  /** Глобальный шаг снятия: кто у кого — см. coachDraftVictimAtStep; всего 3·N шагов. */
   eliminationStepIndex: number
   /** Чья очередь финально выбрать тренера (фаза pick). */
   activeIndex: number

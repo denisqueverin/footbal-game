@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react';
 
 import { FORMATIONS, type FormationId } from '@/entities/game/core/formations';
-import type { CoachAssignment, ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
+import type { CoachAssignment, ColorSchemeId, CpuDifficulty, GameState, TeamId } from '@/entities/game/core/types';
+import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
 import { COACH_SIMULATION_PROMPT_EXTRA } from '@/entities/game/data/coaches';
 
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
+import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 import { schemeAccent, schemeDotColor } from '@/shared/lib/schemeAccent';
 
 import { SETUP_MODE_OPTIONS, SETUP_SCHEME_OPTIONS } from '@/pages/setup-page/setup-page.constants';
@@ -43,8 +45,6 @@ function buildResultExportText(state: GameState): string {
     const team = state.teams[teamId];
     const formationShort = formationLabelShort(team.formation);
     lines.push(`— ${team.name} —`);
-    const turnMs = state.draftTurnAccumMs[teamId] ?? 0;
-    lines.push(`Время на ходах: ${formatDraftDuration(turnMs)}`);
     if (team.coach) {
       lines.push(`Тренер: ${team.coach.name} (${team.coach.countryRu}, ${team.coach.stars}★)`);
     }
@@ -74,6 +74,7 @@ interface TeamSummaryProps {
   picks: Record<string, { playerName: string | null; country: string | null; label: string }>;
   turnTimeMs: number;
   coach: CoachAssignment | null;
+  cpuDifficulty?: CpuDifficulty | null;
 }
 
 function TeamSummary(props: TeamSummaryProps) {
@@ -88,7 +89,12 @@ function TeamSummary(props: TeamSummaryProps) {
         borderLeft: `4px solid ${accent}`,
       }}
     >
-      <div className="result-team-title">{props.title}</div>
+      <div className="result-team-title">
+        <span className="result-team-title-text">{props.title}</span>
+        {props.cpuDifficulty != null ? (
+          <CpuDifficultyIcon difficulty={props.cpuDifficulty} className="result-team-title-diff" />
+        ) : null}
+      </div>
       <div className="result-team-time">Время на ходах: {formatDraftDuration(props.turnTimeMs)}</div>
       {props.coach ? (
         <>
@@ -192,6 +198,9 @@ export function ResultPage(props: ResultPageProps) {
                 picks={team.picksBySlotId}
                 turnTimeMs={state.draftTurnAccumMs[teamId] ?? 0}
                 coach={state.teams[teamId].coach}
+                cpuDifficulty={
+                  isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null
+                }
               />
             );
           })}

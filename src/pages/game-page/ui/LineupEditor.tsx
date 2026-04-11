@@ -1,13 +1,11 @@
-import { useMemo, type CSSProperties } from 'react';
-
-import { useMediaQuery } from '@/shared/lib/useMediaQuery';
-
 import { inferChaosSourceKind } from '@/entities/game/modes/chaosDraftPool';
 import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import { formationRowsForDisplay } from '@/entities/game/core/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 import { isChaosMode, isClubsMode, isNationalDraftSource, isNationalMode } from '@/entities/game/modes/gameMode';
 import type { GameState, TeamId } from '@/entities/game/core/types';
+import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
+import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 
 export interface LineupEditorProps {
   state: GameState;
@@ -16,21 +14,27 @@ export interface LineupEditorProps {
 
 export function LineupEditor(props: LineupEditorProps) {
   const { state } = props;
-  const isNarrow = useMediaQuery('(max-width: 640px)');
-  const styles = useMemo(() => getLineupEditorStyles(isNarrow), [isNarrow]);
 
   return (
-    <div style={styles.wrap}>
-      <div style={styles.title}>Редактирование имён игроков</div>
-      <div style={styles.grid}>
+    <div className="lineup-editor-wrap">
+      <h2 className="lineup-editor-title fc-heading">Редактирование имён игроков</h2>
+      <div className="lineup-editor-grid">
         {state.teamOrder.map((teamId) => {
           const team = state.teams[teamId];
           const rows = formationRowsForDisplay(team.formation);
 
           return (
-            <section key={teamId} style={styles.teamSection}>
-              <h3 style={styles.teamHeading}>{team.name}</h3>
-              <div style={styles.slots}>
+            <section key={teamId} className="lineup-team-section">
+              <h3 className="lineup-team-heading fc-heading">
+                <span className="lineup-team-heading-text">{team.name}</span>
+                {isCpuControlledTeam(state, teamId) ? (
+                  <CpuDifficultyIcon
+                    difficulty={state.cpuDifficultyByTeam[teamId]}
+                    className="lineup-team-heading-diff"
+                  />
+                ) : null}
+              </h3>
+              <div className="lineup-slots">
                 {rows.flatMap((row) =>
                   row.map((cell) => {
                     const pick = team.picksBySlotId[cell.slotId];
@@ -45,14 +49,13 @@ export function LineupEditor(props: LineupEditorProps) {
                       isNationalMode(state.mode) || (isChaosMode(state.mode) && chaosKind === 'national')
                         ? getCountryFlagUrlRu(sourceLabel)
                         : null;
-                    /** Только слоты, где уже был ход драфта (есть клуб/страна); пустые клетки не трогаем. */
                     const hasDraftPick = Boolean(pick?.country);
                     const inputDisabled = !hasDraftPick;
 
                     return (
-                      <label key={cell.slotId} style={styles.row}>
-                        <span style={styles.slotLabel}>{cell.label}</span>
-                        <div style={styles.fieldCol}>
+                      <label key={cell.slotId} className="lineup-row">
+                        <span className="lineup-slot-label">{cell.label}</span>
+                        <div className="lineup-field-col">
                           <input
                             type="text"
                             value={value}
@@ -66,22 +69,19 @@ export function LineupEditor(props: LineupEditorProps) {
                                 ? 'Сначала выберите игрока в драфте — пустые слоты здесь не редактируются'
                                 : undefined
                             }
-                            style={{
-                              ...styles.input,
-                              ...(inputDisabled ? styles.inputDisabled : null),
-                            }}
+                            className="lineup-input"
                           />
                           {sourceLabel ? (
-                            <span style={styles.sourceHint}>
+                            <span className="lineup-source-hint">
                               {isNationalDraftSource(state.mode, chaosKind) ? (
                                 <>
                                   <span>{sourceLabel}</span>
-                                  {natFlagUrl ? <img src={natFlagUrl} alt="" style={styles.hintFlag} /> : null}
+                                  {natFlagUrl ? <img src={natFlagUrl} alt="" className="lineup-hint-flag" /> : null}
                                 </>
                               ) : (
                                 <>
                                   <span>Клуб: {sourceLabel}</span>
-                                  {clubFlagUrl ? <img src={clubFlagUrl} alt="" style={styles.hintFlag} /> : null}
+                                  {clubFlagUrl ? <img src={clubFlagUrl} alt="" className="lineup-hint-flag" /> : null}
                                 </>
                               )}
                             </span>
@@ -98,76 +98,4 @@ export function LineupEditor(props: LineupEditorProps) {
       </div>
     </div>
   );
-}
-
-function getLineupEditorStyles(isNarrow: boolean): Record<string, CSSProperties> {
-  return {
-  wrap: {
-    padding: isNarrow
-      ? '14px max(12px, env(safe-area-inset-right)) 20px max(12px, env(safe-area-inset-left))'
-      : '16px 18px 24px',
-    flex: '1 1 auto',
-    overflow: 'auto',
-    borderBottom: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(0,0,0,0.2)',
-  },
-  title: {
-    fontWeight: 800,
-    fontSize: 16,
-    marginBottom: 14,
-    textAlign: 'center',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: isNarrow ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-    gap: 16,
-    alignItems: 'start',
-  },
-  teamSection: {
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 14,
-    padding: 12,
-    background: 'rgba(255,255,255,0.04)',
-  },
-  teamHeading: { margin: '0 0 10px', fontSize: 15, fontWeight: 750 },
-  slots: { display: 'grid', gap: 8 },
-  row: {
-    display: 'grid',
-    gridTemplateColumns: isNarrow ? 'minmax(0, 72px) 1fr' : '88px 1fr',
-    gap: isNarrow ? 8 : 10,
-    alignItems: 'start',
-  },
-  fieldCol: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
-  slotLabel: { fontSize: 12, opacity: 0.8, paddingTop: 8 },
-  sourceHint: {
-    fontSize: 11,
-    opacity: 0.72,
-    lineHeight: 1.4,
-    display: 'flex',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-  },
-  hintFlag: {
-    width: 20,
-    height: 14,
-    objectFit: 'cover',
-    borderRadius: 2,
-    border: '1px solid rgba(0,0,0,0.35)',
-    verticalAlign: 'middle',
-  },
-  input: {
-    width: '100%',
-    padding: '8px 10px',
-    borderRadius: 10,
-    border: '1px solid rgba(255,255,255,0.14)',
-    background: 'rgba(0,0,0,0.28)',
-    color: 'inherit',
-    outline: 'none',
-  },
-  inputDisabled: {
-    opacity: 0.45,
-    cursor: 'not-allowed',
-  },
-  };
 }

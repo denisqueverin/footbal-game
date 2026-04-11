@@ -2,11 +2,13 @@ import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
+  coachDraftEliminationTotalSteps,
   coachDraftPickerAtStep,
   coachDraftVictimAtStep,
 } from '@/entities/game/core/coachDraftPhase';
 import type { CoachAssignment, ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
 import { pickCpuEliminateOneCoachId, pickCpuFinalCoachId } from '@/entities/game/data/coaches';
+import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 import {
   schemeAccent,
@@ -18,6 +20,7 @@ import {
 
 import { APP_VERSION } from '@/shared/config/version';
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
+import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 
 const CPU_COACH_THINK_MS = 3000;
 
@@ -110,7 +113,8 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
     if (!cd || cd.step !== 'eliminate') return [];
     const n = order.length;
     const steps: { picker: TeamId; victim: TeamId }[] = [];
-    for (let s = 0; s < 3 * n; s++) {
+    const total = coachDraftEliminationTotalSteps(n);
+    for (let s = 0; s < total; s++) {
       steps.push({
         picker: coachDraftPickerAtStep(order, s),
         victim: coachDraftVictimAtStep(order, s),
@@ -119,31 +123,9 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
     return steps;
   }, [order, cd?.step]);
 
-  const eliminationFlowStrip = useMemo(() => {
-    if (!cd || cd.step !== 'eliminate' || eliminationStepsPreview.length === 0) {
-      return {
-        start: 0,
-        end: -1,
-        total: 0,
-        cur: 0,
-        cells: [] as { sIdx: number; row: { picker: TeamId; victim: TeamId } }[],
-      };
-    }
-    const total = eliminationStepsPreview.length;
-    const cur = cd.eliminationStepIndex;
-    const maxVisible = 4;
-    let end = Math.min(total - 1, cur + 2);
-    let start = Math.max(0, end - (maxVisible - 1));
-    const cells = eliminationStepsPreview.slice(start, end + 1).map((row, i) => ({
-      sIdx: start + i,
-      row,
-    }));
-    return { start, end, total, cur, cells };
-  }, [cd, eliminationStepsPreview]);
-
   const title =
     cd?.step === 'eliminate'
-      ? 'Выбор тренера: по кругу у соседа по столу'
+      ? 'Выбор тренера: по очереди у разных соперников'
       : 'Выбор тренера: финальный выбор';
 
   const subtitle = useMemo(() => {
@@ -151,7 +133,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
     if (cd.step === 'eliminate' && victimTeam && pickerTeam) {
       const vName = state.teams[victimTeam].name;
       const pName = state.teams[pickerTeam].name;
-      return `${pName} убирает одного тренера из списка «${vName}» (шаг ${cd.eliminationStepIndex + 1} из ${3 * order.length}). Останется двое.`;
+      return `${pName} убирает одного тренера из списка «${vName}» (шаг ${cd.eliminationStepIndex + 1} из ${coachDraftEliminationTotalSteps(order.length)}). Останется двое.`;
     }
     if (cd.step === 'pick' && activeTeam) {
       return `${state.teams[activeTeam].name}: выберите одного тренера из двух — он появится на схеме команды.`;
@@ -245,7 +227,23 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
         onConfirm={props.onReset}
       />
       <div className={`coach-draft-card${fourTeamsLayout ? ' coach-draft-card--four' : ''}`}>
-        <div className="coach-draft-version">v{APP_VERSION}</div>
+        <div className="coach-draft-topstrip">
+          <div className="coach-draft-topstrip-main">
+            {cd.step === 'eliminate' && pickerTeam && victimTeam ? (
+              <p className="coach-draft-current-pair" aria-live="polite">
+                <span className="coach-draft-current-pair-kicker">Сейчас: </span>
+                <strong className="coach-draft-current-pair-picker">{state.teams[pickerTeam].name}</strong>
+                <span className="coach-draft-current-pair-mid"> убирает у </span>
+                <strong className="coach-draft-current-pair-victim">{state.teams[victimTeam].name}</strong>
+              </p>
+            ) : cd.step === 'pick' ? (
+              <p className="coach-draft-current-pair coach-draft-current-pair--muted">
+                Финальный выбор тренера по командам
+              </p>
+            ) : null}
+          </div>
+          <div className="coach-draft-version">v{APP_VERSION}</div>
+        </div>
         <h1 className="coach-draft-title">{title}</h1>
         <p className="coach-draft-sub">{subtitle}</p>
 
@@ -258,50 +256,51 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
 
         {cd.step === 'eliminate' && victimTeam ? (
           <div className="coach-draft-section">
-            {eliminationFlowStrip.cells.length > 0 ? (
-              <div className="coach-draft-flow" aria-label="Окно шагов снятия тренеров">
-                <div className="coach-draft-flow-strip">
-                  {eliminationFlowStrip.start > 0 ? (
-                    <span className="coach-draft-flow-ellipsis" aria-hidden="true">
-                      …
-                    </span>
-                  ) : null}
-                  {eliminationFlowStrip.cells.map(({ sIdx, row }) => {
+            {eliminationStepsPreview.length > 0 ? (
+              <div className="coach-draft-flow" aria-label="Порядок снятия тренеров по шагам">
+                <div
+                  className="coach-draft-flow-strip"
+                  style={
+                    {
+                      ['--coach-draft-flow-cols' as string]: String(eliminationStepsPreview.length),
+                    } as CSSProperties
+                  }
+                >
+                  {eliminationStepsPreview.map((row, sIdx) => {
                     const isCurrent = sIdx === cd.eliminationStepIndex;
                     const pTeam = state.teams[row.picker];
                     const vTeam = state.teams[row.victim];
                     return (
                       <div
                         key={sIdx}
-                        className={`coach-draft-flow-cell${isCurrent ? ' coach-draft-flow-cell--current' : ''}`}
+                        className={`coach-draft-flow-slot${isCurrent ? ' coach-draft-flow-slot--current' : ''}`}
                         title={`Шаг ${sIdx + 1}: ${pTeam.name} → ${vTeam.name}`}
                       >
-                        <span className="coach-draft-flow-pill" style={coachFlowPillStyle(pTeam.colorScheme)}>
-                          {schemeShortRu(pTeam.colorScheme)}
-                        </span>
-                        <span className="coach-draft-flow-mid" aria-hidden="true">
-                          →
-                        </span>
-                        <span
-                          className="coach-draft-flow-pill coach-draft-flow-pill--victim"
-                          style={coachFlowPillStyle(vTeam.colorScheme)}
-                        >
-                          {schemeShortRu(vTeam.colorScheme)}
-                        </span>
+                        <span className="coach-draft-flow-step-idx">{sIdx + 1}</span>
+                        <div className="coach-draft-flow-cell">
+                          <span className="coach-draft-flow-pill" style={coachFlowPillStyle(pTeam.colorScheme)}>
+                            {schemeShortRu(pTeam.colorScheme)}
+                          </span>
+                          <span className="coach-draft-flow-mid" aria-hidden="true">
+                            →
+                          </span>
+                          <span
+                            className="coach-draft-flow-pill coach-draft-flow-pill--victim"
+                            style={coachFlowPillStyle(vTeam.colorScheme)}
+                          >
+                            {schemeShortRu(vTeam.colorScheme)}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
-                  {eliminationFlowStrip.end < eliminationFlowStrip.total - 1 ? (
-                    <span className="coach-draft-flow-ellipsis" aria-hidden="true">
-                      …
-                    </span>
-                  ) : null}
                 </div>
               </div>
             ) : null}
             <div className="coach-draft-hint">
-              Нажмите на карточку тренера в колонке «у этой команды убирают», чтобы снять его с драфта. У всех команд
-              разные тренеры в пулах. Сильные и слабые стороны скрыты до финального выбора.
+              Нажмите на карточку тренера в колонке «у этой команды убирают», чтобы снять его с драфта. Очередь
+              соперников меняется по кругу (сначала у соседа в списке, затем у следующего и т.д.), чтобы снимали у
+              разных команд. У всех команд разные тренеры в пулах; сильные и слабые стороны — только на финале.
             </div>
             <div
               className={`coach-draft-pools-row${fourTeamsLayout ? ' coach-draft-pools-row--four' : ''}`}
@@ -347,7 +346,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                               style={{ ['--coach-accent' as string]: accent }}
                             >
                               {flag ? (
-                                <img src={flag} alt="" className="coach-draft-flag" width={40} height={26} />
+                                <img src={flag} alt="" className="coach-draft-flag" width={34} height={22} />
                               ) : null}
                               <div className="coach-draft-name">{c.name}</div>
                               <div className="coach-draft-meta">
@@ -364,7 +363,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                             style={{ ['--coach-accent' as string]: accent }}
                           >
                             {flag ? (
-                              <img src={flag} alt="" className="coach-draft-flag" width={40} height={26} />
+                              <img src={flag} alt="" className="coach-draft-flag" width={34} height={22} />
                             ) : null}
                             <div className="coach-draft-name">{c.name}</div>
                             <div className="coach-draft-meta">
@@ -403,7 +402,15 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                       style={coachDraftPoolBlockStyle(scheme)}
                     >
                       <div className="coach-draft-pool-label">
-                        {state.teams[teamId].name}
+                        <span className="coach-draft-pool-name-row">
+                          <span>{state.teams[teamId].name}</span>
+                          {isCpuControlledTeam(state, teamId) ? (
+                            <CpuDifficultyIcon
+                              difficulty={state.cpuDifficultyByTeam[teamId]}
+                              className="coach-draft-pool-diff"
+                            />
+                          ) : null}
+                        </span>
                         <span className="coach-draft-pool-scheme"> · {schemeLabelRu(scheme)}</span>
                       </div>
                       <div className="coach-draft-pool-done">
@@ -415,8 +422,8 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                                   src={chosenFlag}
                                   alt=""
                                   className="coach-draft-flag"
-                                  width={36}
-                                  height={24}
+                                  width={32}
+                                  height={20}
                                 />
                               ) : null}
                               <span>
@@ -440,7 +447,15 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                     style={coachDraftPoolBlockStyle(scheme)}
                   >
                     <div className="coach-draft-pool-label">
-                      {state.teams[teamId].name}
+                      <span className="coach-draft-pool-name-row">
+                        <span>{state.teams[teamId].name}</span>
+                        {isCpuControlledTeam(state, teamId) ? (
+                          <CpuDifficultyIcon
+                            difficulty={state.cpuDifficultyByTeam[teamId]}
+                            className="coach-draft-pool-diff"
+                          />
+                        ) : null}
+                      </span>
                       <span className="coach-draft-pool-scheme"> · {schemeLabelRu(scheme)}</span>
                       {isActivePicker ? ' — ваш ход' : ' — ожидает соперник'}
                     </div>
@@ -459,7 +474,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                               style={{ ['--coach-accent' as string]: accent }}
                             >
                               {flag ? (
-                                <img src={flag} alt="" className="coach-draft-flag" width={44} height={28} />
+                                <img src={flag} alt="" className="coach-draft-flag" width={38} height={24} />
                               ) : null}
                               <div className="coach-draft-name">{c.name}</div>
                               <div className="coach-draft-meta">
@@ -476,7 +491,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                             style={{ ['--coach-accent' as string]: accent }}
                           >
                             {flag ? (
-                              <img src={flag} alt="" className="coach-draft-flag" width={44} height={28} />
+                              <img src={flag} alt="" className="coach-draft-flag" width={38} height={24} />
                             ) : null}
                             <div className="coach-draft-name">{c.name}</div>
                             <div className="coach-draft-meta">

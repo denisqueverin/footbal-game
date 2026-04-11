@@ -35,6 +35,7 @@ import { roundTurnOrder } from './turnOrder'
 import { withBestLineupBenchRule } from './bestLineupBenchRule'
 import {
   buildInitialCoachDraftState,
+  coachDraftEliminationTotalSteps,
   coachDraftVictimAtStep,
 } from './coachDraftPhase'
 
@@ -538,7 +539,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (nextPool.length < 2) return state
       const nextPools = { ...cd.pools, [victim]: nextPool }
       const nextStep = cd.eliminationStepIndex + 1
-      const totalSteps = 3 * order.length
+      const totalSteps = coachDraftEliminationTotalSteps(order.length)
       if (nextStep >= totalSteps) {
         return {
           ...state,
@@ -575,7 +576,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (nextPool.length < 2) return state
       const nextPools = { ...cd.pools, [victim]: nextPool }
       const nextStep = cd.eliminationStepIndex + 1
-      const totalSteps = 3 * order.length
+      const totalSteps = coachDraftEliminationTotalSteps(order.length)
       if (nextStep >= totalSteps) {
         return {
           ...state,
