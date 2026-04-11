@@ -5,10 +5,12 @@ export {
   isClubsMode,
   isNationalDraftSource,
   isNationalMode,
+  isUnfairCpuDifficulty,
   supportsBestLineupHint,
 } from './modes/gameMode';
 export type {
   ColorSchemeId,
+  CpuDifficulty,
   DraftSourceKind,
   GameMode,
   GamePhase,

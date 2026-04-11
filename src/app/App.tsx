@@ -5,7 +5,6 @@ import { createInitialGameState, gameReducer } from '@/entities/game/core/reduce
 import type {
   ColorSchemeId,
   CpuDifficulty,
-  GameKind,
   GameMode,
   HintsBudget,
   RandomPlayerHintsBudget,
@@ -41,10 +40,6 @@ export function App() {
     dispatch({ type: 'setup/setMode', mode });
   }, []);
 
-  const handleSetupSetGameKind = useCallback((gameKind: GameKind) => {
-    dispatch({ type: 'setup/setGameKind', gameKind });
-  }, []);
-
   const handleSetupSetCpuDifficulty = useCallback((difficulty: CpuDifficulty) => {
     dispatch({ type: 'setup/setCpuDifficulty', difficulty });
   }, []);
@@ -73,8 +68,8 @@ export function App() {
     dispatch({ type: 'setup/setRandomPlayerHintsBudget', budget });
   }, []);
 
-  const handleSetupSetBestLineupIncludeBench = useCallback((includeBench: boolean) => {
-    dispatch({ type: 'setup/setBestLineupIncludeBench', includeBench });
+  const handleSetupApplyDevPreset = useCallback(() => {
+    dispatch({ type: 'setup/applyDevPreset' });
   }, []);
 
   const handleSetupStart = useCallback(() => {
@@ -143,14 +138,12 @@ export function App() {
         onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
         onSetMode={handleSetupSetMode}
-        onSetGameKind={handleSetupSetGameKind}
         onSetCpuDifficulty={handleSetupSetCpuDifficulty}
         hintsBudget={state.hintsBudgetPerPlayer}
         onSetHintsBudget={handleSetupSetHintsBudget}
         randomPlayerHintsBudget={state.randomPlayerHintsBudgetPerPlayer}
         onSetRandomPlayerHintsBudget={handleSetupSetRandomPlayerHintsBudget}
-        bestLineupIncludeBench={state.bestLineupIncludeBench}
-        onSetBestLineupIncludeBench={handleSetupSetBestLineupIncludeBench}
+        onApplyDevPreset={handleSetupApplyDevPreset}
         onStart={handleSetupStart}
       />
     );

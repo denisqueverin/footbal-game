@@ -1,4 +1,5 @@
 import { assignPlaceholderTeamNames } from '@/entities/game/data/teamNames';
+import { computeBestLineupIncludeBench } from '@/entities/game/core/bestLineupBenchRule';
 import type {
   DraftSourceKind,
   GameMode,
@@ -24,7 +25,7 @@ export type PersistedGamePayload = {
 const TEAM_IDS: TeamId[] = ['team1', 'team2', 'team3', 'team4'];
 
 function isHintsBudget(n: number): n is HintsBudget {
-  return n === 0 || n === 1 || n === 2 || n === 3;
+  return n === 0 || n === 1 || n === 2 || n === 3 || n === 11;
 }
 
 function isRandomPlayerHintsBudget(n: number): n is RandomPlayerHintsBudget {
@@ -43,6 +44,8 @@ function normalizeMode(mode: unknown): GameMode {
   if (mode === 'clubs') return 'clubs'
   if (mode === 'rpl') return 'rpl'
   if (mode === 'chaos') return 'chaos'
+  /** Старый «режим» нечестной игры перенесён в сложность CPU. */
+  if (mode === 'unfair') return 'nationalTop30'
   if (mode === 'nationalTop15') return 'nationalTop15'
   if (mode === 'nationalTop30') return 'nationalTop30'
   if (mode === 'national') return 'nationalTop15'
@@ -58,6 +61,7 @@ function normalizeGameKind(kind: unknown): GameKind {
 function normalizeCpuDifficulty(value: unknown): CpuDifficulty {
   if (value === 'beginner') return 'beginner'
   if (value === 'hard') return 'hard'
+  if (value === 'unfair') return 'unfair'
   return 'normal'
 }
 
@@ -105,12 +109,13 @@ function normalizeGameState(state: GameState): GameState {
     team4: legacy.hintUsedThisRound?.team4 ?? false,
   }
 
-  const bestLineupIncludeBench =
-    typeof legacy.bestLineupIncludeBench === 'boolean' ? legacy.bestLineupIncludeBench : true
-
+  const rawLegacyMode = legacy.mode as unknown
   const mode = normalizeMode(legacy.mode ?? state.mode)
   const gameKind = normalizeGameKind(legacy.gameKind ?? state.gameKind)
-  const cpuDifficulty = normalizeCpuDifficulty(legacy.cpuDifficulty ?? state.cpuDifficulty)
+  let cpuDifficulty = normalizeCpuDifficulty(legacy.cpuDifficulty ?? state.cpuDifficulty)
+  if (rawLegacyMode === 'unfair') {
+    cpuDifficulty = 'unfair'
+  }
 
   const normalizeController = (v: unknown): TeamController => (v === 'cpu' ? 'cpu' : 'human')
   const teamControllers: Record<TeamId, TeamController> = {
@@ -134,13 +139,22 @@ function normalizeGameState(state: GameState): GameState {
   const randomPlayerHintsRemaining =
     legacy.randomPlayerHintsRemaining ?? defaultRandomPlayerHintsRemaining(randomBudget)
 
-  return {
+  const rawDraftTurnAcc = (legacy as { draftTurnAccumMs?: Record<TeamId, number> }).draftTurnAccumMs
+  const draftTurnAccumMs: Record<TeamId, number> =
+    rawDraftTurnAcc &&
+    typeof rawDraftTurnAcc.team1 === 'number' &&
+    typeof rawDraftTurnAcc.team2 === 'number' &&
+    typeof rawDraftTurnAcc.team3 === 'number' &&
+    typeof rawDraftTurnAcc.team4 === 'number'
+      ? rawDraftTurnAcc
+      : { team1: 0, team2: 0, team3: 0, team4: 0 }
+
+  const merged: GameState = {
     ...state,
     mode,
     gameKind,
     cpuDifficulty,
     teamControllers,
-    bestLineupIncludeBench,
     hintsBudgetPerPlayer: budget,
     hintsRemaining,
     hintUsedThisRound,
@@ -169,6 +183,22 @@ function normalizeGameState(state: GameState): GameState {
     draftTimerStartedAt: state.draftTimerStartedAt ?? null,
     draftTimerPausedAt: state.draftTimerPausedAt ?? null,
     draftTimerPausedAccumMs: state.draftTimerPausedAccumMs ?? 0,
+
+    draftTurnAccumMs,
+    draftTurnSliceStartedAt: null,
+  }
+
+  const hasTurnSliceKey = Object.prototype.hasOwnProperty.call(legacy, 'draftTurnSliceStartedAt')
+  const draftTurnSliceStartedAt: number | null = hasTurnSliceKey
+    ? ((legacy as { draftTurnSliceStartedAt: number | null }).draftTurnSliceStartedAt ?? null)
+    : merged.phase === 'drafting' && merged.draftTimerPausedAt == null
+      ? Date.now()
+      : null
+
+  return {
+    ...merged,
+    draftTurnSliceStartedAt,
+    bestLineupIncludeBench: computeBestLineupIncludeBench(merged),
   }
 }
 

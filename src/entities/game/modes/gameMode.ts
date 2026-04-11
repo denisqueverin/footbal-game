@@ -1,4 +1,4 @@
-import type { DraftSourceKind, GameMode } from '../core/types'
+import type { CpuDifficulty, DraftSourceKind, GameMode } from '../core/types'
 
 export function isNationalMode(mode: GameMode): boolean {
   return mode === 'nationalTop15' || mode === 'nationalTop30'
@@ -15,6 +15,10 @@ export function isChaosMode(mode: GameMode): boolean {
 /** Подсказка «Лучший состав» доступна. */
 export function supportsBestLineupHint(mode: GameMode): boolean {
   return isNationalMode(mode) || isClubsMode(mode) || isChaosMode(mode)
+}
+
+export function isUnfairCpuDifficulty(difficulty: CpuDifficulty): boolean {
+  return difficulty === 'unfair'
 }
 
 /** Флаг страны vs клуба на слоте / в шапке. */

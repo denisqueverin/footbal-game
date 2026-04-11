@@ -1,4 +1,4 @@
-import type { GameState, TeamId } from '../core/types'
+import type { GameMode, GameState, TeamId } from '../core/types'
 import { drawRandom } from '../core/random'
 import {
   NATIONAL_TOP15_RANDOM_PLAYERS,
@@ -585,6 +585,40 @@ export function countAvailableAnyEuroClubOutfieldPlayers(args: {
     usedPlayerNames: args.usedPlayerNames,
     starsForName: (name) => EURO_CLUBS_PLAYER_STARS[args.club]?.[name] ?? null,
   })
+}
+
+/**
+ * Когда обычные эвристики не нашли игрока (пул на позиции исчерпан и т.п.),
+ * берём любого доступного из пула — лучше дубль в данных, чем «CPU Player 1234».
+ */
+export function pickEmergencyCpuDraftPlayer(args: {
+  effectiveMode: GameMode
+  source: string
+}): BestPick | null {
+  const dupOk: string[] = []
+  const m = args.effectiveMode
+  if (m === 'nationalTop15') {
+    return (
+      pickBestAnyTop15OutfieldPlayer({ country: args.source, usedPlayerNames: dupOk }) ??
+      pickBestTop15Player({ country: args.source, position: 'GK', usedPlayerNames: dupOk })
+    )
+  }
+  if (m === 'nationalTop30') {
+    return (
+      pickBestAnyTop30OutfieldPlayer({ country: args.source, usedPlayerNames: dupOk }) ??
+      pickBestTop30Player({ country: args.source, position: 'GK', usedPlayerNames: dupOk })
+    )
+  }
+  if (m === 'rpl') {
+    return (
+      pickBestAnyRplOutfieldPlayer({ club: args.source, usedPlayerNames: dupOk }) ??
+      pickBestRplPlayer({ club: args.source, position: 'GK', usedPlayerNames: dupOk })
+    )
+  }
+  return (
+    pickBestAnyEuroClubOutfieldPlayer({ club: args.source, usedPlayerNames: dupOk }) ??
+    pickBestEuroClubPlayer({ club: args.source, position: 'GK', usedPlayerNames: dupOk })
+  )
 }
 
 export function createTeamNumberRecord<T>(value: T): Record<TeamId, T> {

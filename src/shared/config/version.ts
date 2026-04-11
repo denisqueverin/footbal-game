@@ -1,2 +1,2 @@
 /** Текущая версия игры (релиз). */
-export const APP_VERSION = 15;
+export const APP_VERSION = 16;

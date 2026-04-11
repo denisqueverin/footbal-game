@@ -8,7 +8,6 @@ import type {
   DraftSourceKind,
   GameMode,
   GameState,
-  GameKind,
   CpuDifficulty,
   HintsBudget,
   RandomPlayerHintsBudget,
@@ -33,13 +32,13 @@ import {
   pickRandomUnique,
 } from '../data/topCountries'
 import { roundTurnOrder } from './turnOrder'
+import { withBestLineupBenchRule } from './bestLineupBenchRule'
 
 export type GameAction =
   | { type: 'setup/start' }
   | { type: 'drawReveal/assignTeamNames' }
   | { type: 'drawReveal/continue' }
   | { type: 'setup/setMode'; mode: GameMode }
-  | { type: 'setup/setGameKind'; gameKind: GameKind }
   | { type: 'setup/setCpuDifficulty'; difficulty: CpuDifficulty }
   | { type: 'setup/setTeamCount'; count: TeamCount }
   | { type: 'setup/setTeamController'; team: TeamId; controller: TeamController }
@@ -47,7 +46,7 @@ export type GameAction =
   | { type: 'setup/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
   | { type: 'setup/setHintsBudget'; budget: HintsBudget }
   | { type: 'setup/setRandomPlayerHintsBudget'; budget: RandomPlayerHintsBudget }
-  | { type: 'setup/setBestLineupIncludeBench'; includeBench: boolean }
+  | { type: 'setup/applyDevPreset' }
   | {
       type: 'draft/confirmPick'
       team: TeamId
@@ -65,7 +64,34 @@ export type GameAction =
 
 const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
 
+function emptyDraftTurnAccumMs(): Record<TeamId, number> {
+  return { team1: 0, team2: 0, team3: 0, team4: 0 }
+}
+
+/** Закрыть отрезок времени текущего хода (`turn`) и добавить в накопители. */
+function commitCurrentTurnSlice(state: GameState, now: number): GameState {
+  if (state.phase !== 'drafting' || state.draftTurnSliceStartedAt == null) return state
+  const dt = Math.max(0, now - state.draftTurnSliceStartedAt)
+  const team = state.turn
+  return {
+    ...state,
+    draftTurnAccumMs: {
+      ...state.draftTurnAccumMs,
+      [team]: (state.draftTurnAccumMs[team] ?? 0) + dt,
+    },
+    draftTurnSliceStartedAt: null,
+  }
+}
+
+/** Начать отсчёт для текущего `turn` (не на паузе и в фазе драфта). */
+function openCurrentTurnSlice(state: GameState, now: number): GameState {
+  if (state.phase !== 'drafting') return state
+  if (state.draftTimerPausedAt != null) return { ...state, draftTurnSliceStartedAt: null }
+  return { ...state, draftTurnSliceStartedAt: now }
+}
+
 function teamOrderForCount(count: TeamCount): TeamId[] {
+  if (count === 1) return ['team1', 'team2']
   return ALL_TEAMS.slice(0, count)
 }
 
@@ -223,8 +249,11 @@ export function createInitialGameState(): GameState {
     draftTimerStartedAt: null,
     draftTimerPausedAt: null,
     draftTimerPausedAccumMs: 0,
+
+    draftTurnAccumMs: emptyDraftTurnAccumMs(),
+    draftTurnSliceStartedAt: null,
   }
-  return base
+  return withBestLineupBenchRule(base)
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
@@ -236,37 +265,35 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase !== 'setup') return state
       return { ...state, mode: action.mode }
     }
-    case 'setup/setGameKind': {
-      if (state.phase !== 'setup') return state
-      // В режиме vs CPU всегда 2 команды (человек + компьютер).
-      if (action.gameKind === 'vsCpu') {
-        const order: TeamId[] = ['team1', 'team2']
-        return {
-          ...state,
-          gameKind: 'vsCpu',
-          teamOrder: order,
-          turn: order[0],
-          teamControllers: { ...state.teamControllers, team1: 'human', team2: 'cpu' },
-        }
-      }
-      // Возврат в мультиплеер: оставляем выбранные контроллеры, но по умолчанию делаем team2 человеком,
-      // чтобы не тянуть "vsCpu" настройку неожиданно.
-      return {
-        ...state,
-        gameKind: 'multi',
-        teamControllers: { ...state.teamControllers, team2: 'human' },
-      }
-    }
     case 'setup/setCpuDifficulty': {
       if (state.phase !== 'setup') return state
-      return { ...state, cpuDifficulty: action.difficulty }
+      return withBestLineupBenchRule({ ...state, cpuDifficulty: action.difficulty })
     }
     case 'setup/setTeamCount': {
       if (state.phase !== 'setup') return state
-      // В режиме vs CPU количество команд фиксировано (2).
-      if (state.gameKind === 'vsCpu') return state
-      const nextOrder = teamOrderForCount(action.count)
-      return { ...state, teamOrder: nextOrder, turn: nextOrder[0] ?? 'team1' }
+      const count = action.count
+      if (count === 1) {
+        const order: TeamId[] = ['team1', 'team2']
+        return withBestLineupBenchRule({
+          ...state,
+          gameKind: 'vsCpu',
+          teamOrder: order,
+          turn: order[0] ?? 'team1',
+          teamControllers: { ...state.teamControllers, team1: 'human', team2: 'cpu' },
+        })
+      }
+      const nextOrder = teamOrderForCount(count)
+      let teamControllers = state.teamControllers
+      if (state.gameKind === 'vsCpu') {
+        teamControllers = { ...state.teamControllers, team1: 'human', team2: 'human' }
+      }
+      return withBestLineupBenchRule({
+        ...state,
+        gameKind: 'multi',
+        teamOrder: nextOrder,
+        turn: nextOrder[0] ?? 'team1',
+        teamControllers,
+      })
     }
     case 'setup/setTeamController': {
       if (state.phase !== 'setup') return state
@@ -274,13 +301,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.gameKind === 'vsCpu') return state
       // Первая команда всегда "человек" (чтобы была хоть одна управляемая вручную команда в UI).
       if (action.team === 'team1' && action.controller !== 'human') return state
-      return {
+      return withBestLineupBenchRule({
         ...state,
         teamControllers: {
           ...state.teamControllers,
           [action.team]: action.controller,
         },
-      }
+      })
     }
     case 'setup/setTeamFormation': {
       if (state.formationLocked) return state
@@ -313,9 +340,13 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase !== 'setup') return state
       return { ...state, randomPlayerHintsBudgetPerPlayer: action.budget }
     }
-    case 'setup/setBestLineupIncludeBench': {
+    case 'setup/applyDevPreset': {
       if (state.phase !== 'setup') return state
-      return { ...state, bestLineupIncludeBench: action.includeBench }
+      return withBestLineupBenchRule({
+        ...state,
+        hintsBudgetPerPlayer: 11,
+        randomPlayerHintsBudgetPerPlayer: 11,
+      })
     }
     case 'drawReveal/assignTeamNames': {
       if (state.phase !== 'drawReveal') return state
@@ -323,41 +354,42 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return assignRandomTeamNames(state)
     }
     case 'setup/start': {
+      const setupState = withBestLineupBenchRule(state)
       const isCpuTeam = (teamId: TeamId): boolean => {
-        return state.gameKind === 'vsCpu'
+        return setupState.gameKind === 'vsCpu'
           ? teamId === 'team2'
-          : state.teamControllers[teamId] === 'cpu'
+          : setupState.teamControllers[teamId] === 'cpu'
       }
 
       const chaosPicks =
-        state.mode === 'chaos' ? pickRandomUnique(buildChaosDraftPool(), state.maxRounds) : null
+        setupState.mode === 'chaos' ? pickRandomUnique(buildChaosDraftPool(), setupState.maxRounds) : null
       const items =
         chaosPicks != null
           ? chaosPicks.map((p) => p.label)
-          : state.mode === 'rpl'
-            ? pickRandomUnique(RPL_CLUBS, state.maxRounds)
-            : state.mode === 'clubs'
-              ? pickRandomUnique(TOP_50_EURO_CLUBS, state.maxRounds)
-              : state.mode === 'nationalTop15'
-                ? pickRandomUnique(TOP_15_FOOTBALL_COUNTRIES_RU, state.maxRounds)
-                : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, state.maxRounds)
+          : setupState.mode === 'rpl'
+            ? pickRandomUnique(RPL_CLUBS, setupState.maxRounds)
+            : setupState.mode === 'clubs'
+              ? pickRandomUnique(TOP_50_EURO_CLUBS, setupState.maxRounds)
+              : setupState.mode === 'nationalTop15'
+                ? pickRandomUnique(TOP_15_FOOTBALL_COUNTRIES_RU, setupState.maxRounds)
+                : pickRandomUnique(TOP_30_FOOTBALL_COUNTRIES_RU, setupState.maxRounds)
       const chaosKindsAll =
         chaosPicks != null ? chaosPicks.map((p) => p.kind) : ([] as GameState['chaosDraftSourceKindsAll'])
       const chaosKindsRemaining =
         chaosPicks != null ? [...chaosKindsAll] : ([] as GameState['chaosDraftSourceKindsRemaining'])
       const order: TeamId[] =
-        state.teamOrder.length > 0 ? state.teamOrder : (['team1', 'team2'] as TeamId[])
+        setupState.teamOrder.length > 0 ? setupState.teamOrder : (['team1', 'team2'] as TeamId[])
 
       const n = order.length
       // В vsCPU оставляем прежнее поведение (CPU ходит вторым в раунде 1),
       // в остальных случаях — случайный стартовый сдвиг.
-      const draftTurnOrderBase = state.gameKind === 'vsCpu' ? 0 : n > 0 ? Math.floor(Math.random() * n) : 0
-      const hintBudget = state.hintsBudgetPerPlayer
-      const randomPlayerHintBudget = state.randomPlayerHintsBudgetPerPlayer
+      const draftTurnOrderBase = setupState.gameKind === 'vsCpu' ? 0 : n > 0 ? Math.floor(Math.random() * n) : 0
+      const hintBudget = setupState.hintsBudgetPerPlayer
+      const randomPlayerHintBudget = setupState.randomPlayerHintsBudgetPerPlayer
 
-      const nextTeams: GameState['teams'] = { ...state.teams }
+      const nextTeams: GameState['teams'] = { ...setupState.teams }
       for (const teamId of order) {
-        const prev = state.teams[teamId]
+        const prev = setupState.teams[teamId]
         // Компьютер выбирает схему случайно перед жеребьёвкой.
         const nextFormation =
           isCpuTeam(teamId)
@@ -368,18 +400,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         nextTeams[teamId] = makeEmptyTeam(teamId, nextFormation, prev.name, prev.colorScheme)
       }
       return {
-        ...state,
+        ...setupState,
         phase: 'drawReveal',
         formationLocked: true,
         draftTurnOrderBase,
         hintsRemaining: createHintsRemaining(hintBudget),
         hintUsedThisRound: createHintUsedThisRound(),
         randomPlayerHintsRemaining: createRandomPlayerHintsRemaining(
-          state.mode === 'nationalTop15' ||
-            state.mode === 'nationalTop30' ||
-            state.mode === 'rpl' ||
-            state.mode === 'clubs' ||
-            state.mode === 'chaos'
+          setupState.mode === 'nationalTop15' ||
+            setupState.mode === 'nationalTop30' ||
+            setupState.mode === 'rpl' ||
+            setupState.mode === 'clubs' ||
+            setupState.mode === 'chaos'
             ? randomPlayerHintBudget
             : 0,
         ),
@@ -396,6 +428,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         draftTimerStartedAt: null,
         draftTimerPausedAt: null,
         draftTimerPausedAccumMs: 0,
+
+        draftTurnAccumMs: emptyDraftTurnAccumMs(),
+        draftTurnSliceStartedAt: null,
       }
     }
     case 'drawReveal/continue': {
@@ -413,22 +448,29 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         draftTimerStartedAt: startedAt,
         draftTimerPausedAt: null,
         draftTimerPausedAccumMs: drawn.draftTimerPausedAccumMs,
+        draftTurnAccumMs: emptyDraftTurnAccumMs(),
+        draftTurnSliceStartedAt: startedAt,
       }
     }
     case 'draft/setDraftTimerPaused': {
       if (state.phase !== 'drafting') return state
       if (action.paused) {
         if (state.draftTimerPausedAt != null) return state
-        return { ...state, draftTimerPausedAt: Date.now() }
+        const now = Date.now()
+        const flushed = commitCurrentTurnSlice(state, now)
+        return { ...flushed, draftTimerPausedAt: now }
       }
       if (state.draftTimerPausedAt == null) return state
       const now = Date.now()
       const delta = now - state.draftTimerPausedAt
-      return {
-        ...state,
-        draftTimerPausedAt: null,
-        draftTimerPausedAccumMs: state.draftTimerPausedAccumMs + delta,
-      }
+      return openCurrentTurnSlice(
+        {
+          ...state,
+          draftTimerPausedAt: null,
+          draftTimerPausedAccumMs: state.draftTimerPausedAccumMs + delta,
+        },
+        now,
+      )
     }
     case 'draft/useBestLineupHint': {
       if (state.phase !== 'drafting') return state
@@ -485,7 +527,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished' }
+        const now = Date.now()
+        const clocked = commitCurrentTurnSlice(state, now)
+        return {
+          ...clocked,
+          teams: nextState.teams,
+          phase: 'finished',
+          draftTurnSliceStartedAt: null,
+        }
       }
 
       return nextState
@@ -575,19 +624,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
 
+      const now = Date.now()
+      const clocked = commitCurrentTurnSlice(state, now)
       const nextState: GameState = {
-        ...state,
+        ...clocked,
         formationLocked: true,
         randomPlayerHintsRemaining: {
-          ...state.randomPlayerHintsRemaining,
+          ...clocked.randomPlayerHintsRemaining,
           [action.team]: remaining - 1,
         },
         randomPlayerHintError: null,
-        teams: { ...state.teams, [action.team]: nextTeam },
+        teams: { ...clocked.teams, [action.team]: nextTeam },
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished' }
+        return { ...nextState, phase: 'finished', draftTurnSliceStartedAt: null }
       }
 
       const orderThisRound = roundTurnOrder(
@@ -598,20 +649,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const nextTurn = nextTeamId(action.team, orderThisRound)
       const first = orderThisRound[0] ?? nextTurn
       if (nextTurn !== first) {
-        return { ...nextState, turn: nextTurn }
+        return openCurrentTurnSlice({ ...nextState, turn: nextTurn }, now)
       }
 
       // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
-        return { ...advanced, phase: 'finished' }
+        return { ...advanced, phase: 'finished', draftTurnSliceStartedAt: null }
       }
       const firstNextRound = roundTurnOrder(
         advanced.teamOrder,
         advanced.draftTurnOrderBase,
         advanced.roundIndex,
       )[0]
-      return { ...advanced, turn: firstNextRound ?? advanced.turn }
+      return openCurrentTurnSlice({ ...advanced, turn: firstNextRound ?? advanced.turn }, now)
     }
     case 'draft/confirmPick': {
       if (state.phase !== 'drafting') return state
@@ -641,14 +692,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
 
+      const now = Date.now()
+      const clocked = commitCurrentTurnSlice(state, now)
       const nextState: GameState = {
-        ...state,
+        ...clocked,
         formationLocked: true,
-        teams: { ...state.teams, [action.team]: nextTeam },
+        teams: { ...clocked.teams, [action.team]: nextTeam },
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished' }
+        return { ...nextState, phase: 'finished', draftTurnSliceStartedAt: null }
       }
 
       const orderThisRound = roundTurnOrder(
@@ -659,20 +712,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const nextTurn = nextTeamId(action.team, orderThisRound)
       const first = orderThisRound[0] ?? nextTurn
       if (nextTurn !== first) {
-        return { ...nextState, turn: nextTurn }
+        return openCurrentTurnSlice({ ...nextState, turn: nextTurn }, now)
       }
 
       // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
-        return { ...advanced, phase: 'finished' }
+        return { ...advanced, phase: 'finished', draftTurnSliceStartedAt: null }
       }
       const firstNextRound = roundTurnOrder(
         advanced.teamOrder,
         advanced.draftTurnOrderBase,
         advanced.roundIndex,
       )[0]
-      return { ...advanced, turn: firstNextRound ?? advanced.turn }
+      return openCurrentTurnSlice({ ...advanced, turn: firstNextRound ?? advanced.turn }, now)
     }
     default:
       return state

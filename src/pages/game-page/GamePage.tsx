@@ -22,6 +22,7 @@ import {
 import type { DraftSourceKind, GameMode, GameState, TeamId } from '@/entities/game/core/types';
 import {
   existingPickedPlayerNames,
+  pickEmergencyCpuDraftPlayer,
   countAvailableEuroClubPlayers,
   countAvailableRplPlayers,
   countAvailableTop15Players,
@@ -43,6 +44,11 @@ import {
   pickRandomTop15Player,
   pickRandomTop30Player,
 } from '@/entities/game/hints/randomPlayerHint';
+import {
+  pickBestUnfairCpuAnyPosition,
+  pickBestUnfairCpuPlayer,
+  pickUnfairCpuDupOk,
+} from '@/entities/game/hints/unfairCpuPool';
 
 import { APP_VERSION } from '@/shared/config/version';
 import { schemeAccent } from '@/shared/lib/schemeAccent';
@@ -53,7 +59,7 @@ import { RoundIntroModal } from '@/shared/ui/round-intro-modal';
 import { TeamBoard } from '@/shared/ui/team-board';
 
 import { ROUND_MODAL_EXIT_MS, ROUND_MODAL_MS } from './game-page.constants';
-import { formatDraftDuration, getDraftElapsedMs } from './game-page.utils';
+import { formatDraftDuration, getDraftElapsedMs, getTeamDraftThinkingMs } from './game-page.utils';
 import { LineupEditor } from './ui/LineupEditor';
 
 export interface GamePageProps {
@@ -335,6 +341,45 @@ export function GamePage(props: GamePageProps) {
 
     const usedNames = existingPickedPlayerNames(state);
 
+    let picked: { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null = null;
+    let chosen = emptySlots[0]!;
+
+    if (state.cpuDifficulty === 'unfair') {
+      const shuffled = [...emptySlots].sort(() => Math.random() - 0.5);
+      let best: {
+        slot: (typeof emptySlots)[number];
+        name: string;
+        stars: 1 | 2 | 3 | 4 | 5;
+      } | null = null;
+      for (const slot of shuffled) {
+        const u = pickBestUnfairCpuPlayer({ slotLabel: slot.label, usedPlayerNames: usedNames });
+        if (!u) continue;
+        if (
+          !best ||
+          u.stars > best.stars ||
+          (u.stars === best.stars && Math.random() < 0.5)
+        ) {
+          best = { slot, name: u.playerName, stars: u.stars };
+        }
+      }
+      if (best) {
+        chosen = best.slot;
+        picked = { name: best.name, stars: best.stars };
+      } else {
+        const any = pickBestUnfairCpuAnyPosition({ usedPlayerNames: usedNames });
+        if (any) {
+          chosen = emptySlots.find((s) => s.label !== 'GK') ?? emptySlots[0]!;
+          picked = { name: any.playerName, stars: any.stars };
+        }
+      }
+      if (!picked) {
+        const dup = pickUnfairCpuDupOk();
+        if (dup) {
+          chosen = emptySlots.find((s) => s.label !== 'GK') ?? emptySlots[0]!;
+          picked = { name: dup.playerName, stars: dup.stars };
+        }
+      }
+    } else {
     const chaosKind: DraftSourceKind | null =
       state.mode === 'chaos' ? (state.currentDraftSourceKind ?? null) : null;
     const effectiveMode: GameMode =
@@ -431,22 +476,177 @@ export function GamePage(props: GamePageProps) {
       }
     };
 
-    let picked: { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null = null;
-    let chosen = emptySlots[Math.floor(Math.random() * emptySlots.length)]!;
+    /** Порядок имён позиций в пуле: сначала ярлык слота, затем алиасы (см. формации LAM/RAM/RWB). */
+    const positionSearchOrder = (slotLabel: string): string[] => [
+      ...new Set([slotLabel, ...positionAliases(slotLabel)]),
+    ];
 
+    const opponentNeedCountForLabel = (label: string): number => {
+      // Сколько других активных команд ещё не закрыли позицию (по ярлыку слота).
+      // Это простой «контрдрафт»: при прочих равных закрываем то, что нужно соперникам.
+      let n = 0;
+      for (const teamId of state.teamOrder) {
+        if (teamId === cpuTeamId) continue;
+        const t = state.teams[teamId];
+        for (const pick of Object.values(t.picksBySlotId)) {
+          if (pick.label !== label) continue;
+          if (!pick.playerName) n += 1;
+        }
+      }
+      return n;
+    };
+
+    type HardMove = {
+      slotId: string;
+      slotLabel: string;
+      pick: { name: string; stars: 1 | 2 | 3 | 4 | 5 };
+      scarcity: number;
+      oppNeed: number;
+    };
+
+    const bestHardMove = (
+      slots: Array<{ slotId: string; label: string }>,
+      usedPlayerNames: readonly string[],
+    ): HardMove | null => {
+      const moves: HardMove[] = [];
+
+      for (const slot of slots) {
+        const labelsToTry = positionSearchOrder(slot.label);
+        const variants = labelsToTry
+          .map((pos) => {
+            const best = pickBestByPosition(pos, usedPlayerNames);
+            if (!best) return null;
+            const count = countByPosition(pos, usedPlayerNames);
+            return { best, count };
+          })
+          .filter((v) => v != null);
+        if (variants.length === 0) continue;
+
+        // Лучший вариант для слота: max stars, при равенстве — min count (дефицит).
+        variants.sort((a, b) => {
+          if (a!.best.stars !== b!.best.stars) return b!.best.stars - a!.best.stars;
+          return a!.count - b!.count;
+        });
+        const topStars = variants[0]!.best.stars;
+        const top = variants.filter((v) => v!.best.stars === topStars);
+        const minCount = Math.min(...top.map((v) => v!.count));
+        const finalists = top.filter((v) => v!.count === minCount);
+        const chosenVariant = finalists[Math.floor(Math.random() * finalists.length)]!;
+
+        moves.push({
+          slotId: slot.slotId,
+          slotLabel: slot.label,
+          pick: chosenVariant.best,
+          scarcity: chosenVariant.count,
+          oppNeed: opponentNeedCountForLabel(slot.label),
+        });
+      }
+
+      if (moves.length === 0) return null;
+
+      // Сортировка ходов:
+      // 1) max stars
+      // 2) min scarcity
+      // 3) max oppNeed (контрдрафт)
+      moves.sort((a, b) => {
+        if (a.pick.stars !== b.pick.stars) return b.pick.stars - a.pick.stars;
+        if (a.scarcity !== b.scarcity) return a.scarcity - b.scarcity;
+        return b.oppNeed - a.oppNeed;
+      });
+
+      const best = moves[0]!;
+      // Немного рандома среди полностью равных ходов, чтобы игра не была «одной и той же».
+      const equals = moves.filter(
+        (m) =>
+          m.pick.stars === best.pick.stars &&
+          m.scarcity === best.scarcity &&
+          m.oppNeed === best.oppNeed,
+      );
+      return equals[Math.floor(Math.random() * equals.length)]!;
+    };
+
+    chosen = emptySlots[Math.floor(Math.random() * emptySlots.length)]!;
     if (difficulty === 'beginner') {
-      // Всегда рандом: может быть непрофильный игрок в непрофильной позиции.
+      chosen = emptySlots[Math.floor(Math.random() * emptySlots.length)]!;
+      // Начинающий: 4★+ на подходящую позицию (с алиасами слота), иначе любой доступный на те же позиции.
       const slotIsGk = chosen.label === 'GK';
-      picked = slotIsGk ? pickByPosition('GK', null) : pickRandomAny();
+      for (const pos of positionSearchOrder(chosen.label)) {
+        const p = pickByPosition(pos, 4) ?? pickByPosition(pos, null);
+        if (p) {
+          picked = p;
+          break;
+        }
+      }
+      if (!picked) {
+        picked = slotIsGk ? pickByPosition('GK', null) : pickRandomAny();
+      }
     } else if (difficulty === 'hard') {
       // Усиленный hard:
-      // 1) для каждого свободного слота ищем лучший профильный вариант по звёздам
-      // 2) при равенстве звёзд выбираем позицию с меньшим числом доступных кандидатов (дефицитность)
-      // 3) если профильных нет — берём strongest outfield
+      // 1) Базовый ход как раньше (stars + дефицитность),
+      // 2) плюс «контрдрафт» (oppNeed),
+      // 3) плюс планирование на 1 шаг вперёд: оцениваем следующий ход CPU после взятия кандидата.
+      const current = bestHardMove(emptySlots, usedNames);
+      if (current) {
+        // Если следующий ход резко ухудшается из-за дефицита (например, остаётся только GK без кандидатов),
+        // пробуем альтернативы: перебор топ-N ходов и выбираем по суммарной оценке.
+        const candidates: HardMove[] = [];
+        // Соберём небольшой пул альтернатив (до 8), чтобы не тормозить UI.
+        for (const slot of emptySlots) {
+          const one = bestHardMove([slot], usedNames);
+          if (one) candidates.push(one);
+        }
+        // Уберём дубликаты слотов.
+        const uniqueBySlot = new Map<string, HardMove>();
+        for (const c of candidates) uniqueBySlot.set(c.slotId, c);
+        const uniq = Array.from(uniqueBySlot.values());
+        uniq.sort((a, b) => {
+          if (a.pick.stars !== b.pick.stars) return b.pick.stars - a.pick.stars;
+          if (a.scarcity !== b.scarcity) return a.scarcity - b.scarcity;
+          return b.oppNeed - a.oppNeed;
+        });
+        const top = uniq.slice(0, 8);
+
+        const scoreMove = (m: HardMove): number => {
+          // stars — доминанта, scarcity — штраф, oppNeed — лёгкий бонус.
+          const base = m.pick.stars * 10000 - m.scarcity * 25 + m.oppNeed * 40;
+          const usedA = [...usedNames, m.pick.name];
+          const rest = emptySlots.filter((s) => s.slotId !== m.slotId);
+          const nextM = bestHardMove(rest, usedA);
+          if (!nextM) return base;
+          const nextScore = nextM.pick.stars * 10000 - nextM.scarcity * 25 + nextM.oppNeed * 40;
+          // Смотрим вперёд с дисконтом (чтобы текущий ход всё равно был важнее).
+          return base + Math.floor(nextScore * 0.55);
+        };
+
+        const best = top.length > 0 ? top.reduce((best, m) => (scoreMove(m) > scoreMove(best) ? m : best), top[0]!) : current;
+
+        chosen = emptySlots.find((s) => s.slotId === best.slotId) ?? chosen;
+        picked = best.pick;
+      } else {
+        // Fallback: если профильного нет ни на один свободный слот — берём самого сильного полевого игрока.
+        const outfieldSlots = emptySlots.filter((s) => s.label !== 'GK');
+        const bestOutfield = pickBestAnyOutfield(usedNames);
+        if (bestOutfield && outfieldSlots.length > 0) {
+          chosen = outfieldSlots[Math.floor(Math.random() * outfieldSlots.length)]!;
+          picked = bestOutfield;
+        } else {
+          // Если остался только GK (или нет полевого игрока) — пытаемся подобрать GK.
+          const gkSlot = emptySlots.find((s) => s.label === 'GK');
+          const bestGk = pickBestByPosition('GK', usedNames);
+          if (gkSlot && bestGk) {
+            chosen = gkSlot;
+            picked = bestGk;
+          } else {
+            picked = pickRandomAny();
+          }
+        }
+      }
+    } else {
+      // normal: логика как у hard (алгоритм из hard).
       const moves = emptySlots
         .map((slot) => {
-          const aliases = positionAliases(slot.label);
-          const variants = aliases
+          const labelsToTry = positionSearchOrder(slot.label);
+          const variants = labelsToTry
             .map((pos) => {
               const best = pickBestByPosition(pos, usedNames);
               if (!best) return null;
@@ -503,12 +703,20 @@ export function GamePage(props: GamePageProps) {
           }
         }
       }
-    } else {
-      const slotIsGk = chosen.label === 'GK';
-      // normal: стараемся 4★+, иначе любое на позицию (3★ и ниже).
-      picked = pickByPosition(chosen.label, 4) ?? pickByPosition(chosen.label, null);
-      if (!picked) {
-        picked = slotIsGk ? pickByPosition('GK', null) : pickRandomAny();
+    }
+
+    // Слот/позиция могли стать «пустыми» после выборов соперников — пробуем любой другой свободный слот.
+    if (!picked) {
+      const shuffled = [...emptySlots].sort(() => Math.random() - 0.5);
+      outer: for (const slot of shuffled) {
+        for (const pos of positionSearchOrder(slot.label)) {
+          const b = pickBestByPosition(pos, usedNames);
+          if (b) {
+            chosen = slot;
+            picked = b;
+            break outer;
+          }
+        }
       }
     }
 
@@ -530,7 +738,17 @@ export function GamePage(props: GamePageProps) {
       }
     }
 
-    const pickedName = picked?.name ?? `CPU Player ${Math.floor(Math.random() * 10_000)}`;
+    if (!picked) {
+      const emerg = pickEmergencyCpuDraftPlayer({ effectiveMode, source });
+      if (emerg) {
+        const target = emptySlots.find((s) => s.label !== 'GK') ?? emptySlots[0]!;
+        chosen = target;
+        picked = { name: emerg.playerName, stars: emerg.stars };
+      }
+    }
+    }
+
+    const pickedName = picked?.name ?? 'Игрок CPU';
     const pickedStars = picked?.stars ?? null;
 
     // 1) Показать лоадер в выбранном слоте.
@@ -619,6 +837,22 @@ export function GamePage(props: GamePageProps) {
           <button type="button" onClick={handleResetClick} style={styles.ghostBtn}>
             Новая игра
           </button>
+        </div>
+      </div>
+
+      <div style={styles.perTeamTimesBar} aria-label="Время на ходах по командам">
+        <div style={styles.perTeamTimesCaption}>Время на ходах</div>
+        <div style={styles.perTeamTimesGrid}>
+          {state.teamOrder.map((teamId) => {
+            const team = state.teams[teamId];
+            const ms = getTeamDraftThinkingMs(state, teamId, now);
+            return (
+              <div key={teamId} style={styles.perTeamTimeCell}>
+                <span style={{ color: schemeAccent(team.colorScheme), fontWeight: 700 }}>{team.name}</span>
+                <span style={styles.perTeamTimeDigits}>{formatDraftDuration(ms)}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -791,6 +1025,38 @@ function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
     color: '#b8e0ff',
     textShadow: '0 0 20px rgba(100, 180, 255, 0.25)',
     marginTop: 2,
+  },
+  perTeamTimesBar: {
+    padding: isNarrow ? '10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left))' : '10px 18px',
+    borderBottom: '1px solid rgba(255,255,255,0.10)',
+    background: 'rgba(0,0,0,0.12)',
+  },
+  perTeamTimesCaption: {
+    fontSize: 11,
+    fontWeight: 750,
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    opacity: 0.6,
+    marginBottom: 8,
+  },
+  perTeamTimesGrid: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: isNarrow ? 10 : 14,
+    alignItems: 'baseline',
+  },
+  perTeamTimeCell: {
+    display: 'inline-flex',
+    flexDirection: isNarrow ? 'column' : 'row',
+    alignItems: isNarrow ? 'flex-start' : 'baseline',
+    gap: isNarrow ? 2 : 8,
+    minWidth: 0,
+  },
+  perTeamTimeDigits: {
+    fontSize: 15,
+    fontWeight: 800,
+    fontVariantNumeric: 'tabular-nums',
+    opacity: 0.92,
   },
   title: { fontWeight: 750, letterSpacing: -0.2 },
   countryRow: {
