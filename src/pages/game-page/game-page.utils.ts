@@ -1,4 +1,4 @@
-import type { GameState } from '@/entities/game/core/types';
+import type { GameState, TeamId } from '@/entities/game/core/types';
 
 export function getDraftElapsedMs(state: GameState, now: number): number {
   if (!state.draftTimerStartedAt) {
@@ -23,4 +23,18 @@ export function formatDraftDuration(ms: number): string {
   }
 
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/** Полное время на ходах команды (мс): накопленное + текущий незакрытый отрезок, если сейчас её ход. */
+export function getTeamDraftThinkingMs(state: GameState, teamId: TeamId, now: number): number {
+  const base = state.draftTurnAccumMs[teamId] ?? 0;
+  if (
+    state.phase === 'drafting' &&
+    state.turn === teamId &&
+    state.draftTurnSliceStartedAt != null &&
+    state.draftTimerPausedAt == null
+  ) {
+    return base + Math.max(0, now - state.draftTurnSliceStartedAt);
+  }
+  return base;
 }

@@ -8,6 +8,7 @@ import { schemeAccent, schemeDotColor } from '@/shared/lib/schemeAccent';
 
 import { SETUP_MODE_OPTIONS, SETUP_SCHEME_OPTIONS } from '@/pages/setup-page/setup-page.constants';
 import { formationLabelShort } from '@/pages/setup-page/setup-page.utils';
+import { formatDraftDuration } from '@/pages/game-page/game-page.utils';
 
 export interface ResultPageProps {
   state: GameState;
@@ -40,6 +41,8 @@ function buildResultExportText(state: GameState): string {
     const team = state.teams[teamId];
     const formationShort = formationLabelShort(team.formation);
     lines.push(`— ${team.name} —`);
+    const turnMs = state.draftTurnAccumMs[teamId] ?? 0;
+    lines.push(`Время на ходах: ${formatDraftDuration(turnMs)}`);
     lines.push(`Схема: ${formationShort}`);
     const rows = FORMATIONS[team.formation].rows;
     for (const row of rows) {
@@ -62,6 +65,7 @@ interface TeamSummaryProps {
   colorScheme: ColorSchemeId;
   formationId: FormationId;
   picks: Record<string, { playerName: string | null; country: string | null; label: string }>;
+  turnTimeMs: number;
 }
 
 function TeamSummary(props: TeamSummaryProps) {
@@ -77,6 +81,7 @@ function TeamSummary(props: TeamSummaryProps) {
       }}
     >
       <div className="result-team-title">{props.title}</div>
+      <div className="result-team-time">Время на ходах: {formatDraftDuration(props.turnTimeMs)}</div>
       <div className="result-color-row" aria-label={`Цвет команды: ${schemeLabel(props.colorScheme)}`}>
         <span
           className="result-color-dot"
@@ -139,7 +144,7 @@ export function ResultPage(props: ResultPageProps) {
           Финальный свисток
         </div>
         <h1 className="result-title">Игра завершена</h1>
-        <p className="result-sub">Итоги по командам и выбранным схемам.</p>
+        <p className="result-sub">Итоги по командам и выбранным схемам. Ниже — суммарное время, пока у команды был ход.</p>
 
         <div
           className="result-grid"
@@ -157,6 +162,7 @@ export function ResultPage(props: ResultPageProps) {
                 colorScheme={team.colorScheme}
                 formationId={team.formation}
                 picks={team.picksBySlotId}
+                turnTimeMs={state.draftTurnAccumMs[teamId] ?? 0}
               />
             );
           })}

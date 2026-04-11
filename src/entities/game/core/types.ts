@@ -97,5 +97,10 @@ export type GameState = {
   draftTimerPausedAt: number | null
   /** Накопленная пауза (мс), без текущего интервала draftTimerPausedAt. */
   draftTimerPausedAccumMs: number
+
+  /** Суммарное время (мс), пока у команды был ход в фазе драфта (без учёта паузы таймера). */
+  draftTurnAccumMs: Record<TeamId, number>
+  /** Начало текущего отрезка хода для `turn` (null на паузе или вне драфта). */
+  draftTurnSliceStartedAt: number | null
 }
 

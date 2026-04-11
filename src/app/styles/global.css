@@ -1726,6 +1726,15 @@ h3,
   background: rgba(0, 0, 0, 0.22);
 }
 
+.result-team-time {
+  font-size: 13px;
+  font-weight: 650;
+  opacity: 0.85;
+  margin-top: 4px;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
 .result-team-title {
   font-family: var(--fc-font-display);
   font-weight: 800;

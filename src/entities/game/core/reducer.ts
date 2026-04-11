@@ -64,6 +64,32 @@ export type GameAction =
 
 const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
 
+function emptyDraftTurnAccumMs(): Record<TeamId, number> {
+  return { team1: 0, team2: 0, team3: 0, team4: 0 }
+}
+
+/** Закрыть отрезок времени текущего хода (`turn`) и добавить в накопители. */
+function commitCurrentTurnSlice(state: GameState, now: number): GameState {
+  if (state.phase !== 'drafting' || state.draftTurnSliceStartedAt == null) return state
+  const dt = Math.max(0, now - state.draftTurnSliceStartedAt)
+  const team = state.turn
+  return {
+    ...state,
+    draftTurnAccumMs: {
+      ...state.draftTurnAccumMs,
+      [team]: (state.draftTurnAccumMs[team] ?? 0) + dt,
+    },
+    draftTurnSliceStartedAt: null,
+  }
+}
+
+/** Начать отсчёт для текущего `turn` (не на паузе и в фазе драфта). */
+function openCurrentTurnSlice(state: GameState, now: number): GameState {
+  if (state.phase !== 'drafting') return state
+  if (state.draftTimerPausedAt != null) return { ...state, draftTurnSliceStartedAt: null }
+  return { ...state, draftTurnSliceStartedAt: now }
+}
+
 function teamOrderForCount(count: TeamCount): TeamId[] {
   if (count === 1) return ['team1', 'team2']
   return ALL_TEAMS.slice(0, count)
@@ -223,6 +249,9 @@ export function createInitialGameState(): GameState {
     draftTimerStartedAt: null,
     draftTimerPausedAt: null,
     draftTimerPausedAccumMs: 0,
+
+    draftTurnAccumMs: emptyDraftTurnAccumMs(),
+    draftTurnSliceStartedAt: null,
   }
   return withBestLineupBenchRule(base)
 }
@@ -399,6 +428,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         draftTimerStartedAt: null,
         draftTimerPausedAt: null,
         draftTimerPausedAccumMs: 0,
+
+        draftTurnAccumMs: emptyDraftTurnAccumMs(),
+        draftTurnSliceStartedAt: null,
       }
     }
     case 'drawReveal/continue': {
@@ -416,22 +448,29 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         draftTimerStartedAt: startedAt,
         draftTimerPausedAt: null,
         draftTimerPausedAccumMs: drawn.draftTimerPausedAccumMs,
+        draftTurnAccumMs: emptyDraftTurnAccumMs(),
+        draftTurnSliceStartedAt: startedAt,
       }
     }
     case 'draft/setDraftTimerPaused': {
       if (state.phase !== 'drafting') return state
       if (action.paused) {
         if (state.draftTimerPausedAt != null) return state
-        return { ...state, draftTimerPausedAt: Date.now() }
+        const now = Date.now()
+        const flushed = commitCurrentTurnSlice(state, now)
+        return { ...flushed, draftTimerPausedAt: now }
       }
       if (state.draftTimerPausedAt == null) return state
       const now = Date.now()
       const delta = now - state.draftTimerPausedAt
-      return {
-        ...state,
-        draftTimerPausedAt: null,
-        draftTimerPausedAccumMs: state.draftTimerPausedAccumMs + delta,
-      }
+      return openCurrentTurnSlice(
+        {
+          ...state,
+          draftTimerPausedAt: null,
+          draftTimerPausedAccumMs: state.draftTimerPausedAccumMs + delta,
+        },
+        now,
+      )
     }
     case 'draft/useBestLineupHint': {
       if (state.phase !== 'drafting') return state
@@ -488,7 +527,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished' }
+        const now = Date.now()
+        const clocked = commitCurrentTurnSlice(state, now)
+        return {
+          ...clocked,
+          teams: nextState.teams,
+          phase: 'finished',
+          draftTurnSliceStartedAt: null,
+        }
       }
 
       return nextState
@@ -578,19 +624,21 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
 
+      const now = Date.now()
+      const clocked = commitCurrentTurnSlice(state, now)
       const nextState: GameState = {
-        ...state,
+        ...clocked,
         formationLocked: true,
         randomPlayerHintsRemaining: {
-          ...state.randomPlayerHintsRemaining,
+          ...clocked.randomPlayerHintsRemaining,
           [action.team]: remaining - 1,
         },
         randomPlayerHintError: null,
-        teams: { ...state.teams, [action.team]: nextTeam },
+        teams: { ...clocked.teams, [action.team]: nextTeam },
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished' }
+        return { ...nextState, phase: 'finished', draftTurnSliceStartedAt: null }
       }
 
       const orderThisRound = roundTurnOrder(
@@ -601,20 +649,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const nextTurn = nextTeamId(action.team, orderThisRound)
       const first = orderThisRound[0] ?? nextTurn
       if (nextTurn !== first) {
-        return { ...nextState, turn: nextTurn }
+        return openCurrentTurnSlice({ ...nextState, turn: nextTurn }, now)
       }
 
       // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
-        return { ...advanced, phase: 'finished' }
+        return { ...advanced, phase: 'finished', draftTurnSliceStartedAt: null }
       }
       const firstNextRound = roundTurnOrder(
         advanced.teamOrder,
         advanced.draftTurnOrderBase,
         advanced.roundIndex,
       )[0]
-      return { ...advanced, turn: firstNextRound ?? advanced.turn }
+      return openCurrentTurnSlice({ ...advanced, turn: firstNextRound ?? advanced.turn }, now)
     }
     case 'draft/confirmPick': {
       if (state.phase !== 'drafting') return state
@@ -644,14 +692,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         },
       }
 
+      const now = Date.now()
+      const clocked = commitCurrentTurnSlice(state, now)
       const nextState: GameState = {
-        ...state,
+        ...clocked,
         formationLocked: true,
-        teams: { ...state.teams, [action.team]: nextTeam },
+        teams: { ...clocked.teams, [action.team]: nextTeam },
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished' }
+        return { ...nextState, phase: 'finished', draftTurnSliceStartedAt: null }
       }
 
       const orderThisRound = roundTurnOrder(
@@ -662,20 +712,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const nextTurn = nextTeamId(action.team, orderThisRound)
       const first = orderThisRound[0] ?? nextTurn
       if (nextTurn !== first) {
-        return { ...nextState, turn: nextTurn }
+        return openCurrentTurnSlice({ ...nextState, turn: nextTurn }, now)
       }
 
       // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
-        return { ...advanced, phase: 'finished' }
+        return { ...advanced, phase: 'finished', draftTurnSliceStartedAt: null }
       }
       const firstNextRound = roundTurnOrder(
         advanced.teamOrder,
         advanced.draftTurnOrderBase,
         advanced.roundIndex,
       )[0]
-      return { ...advanced, turn: firstNextRound ?? advanced.turn }
+      return openCurrentTurnSlice({ ...advanced, turn: firstNextRound ?? advanced.turn }, now)
     }
     default:
       return state

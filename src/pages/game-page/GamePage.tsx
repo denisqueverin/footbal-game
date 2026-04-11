@@ -59,7 +59,7 @@ import { RoundIntroModal } from '@/shared/ui/round-intro-modal';
 import { TeamBoard } from '@/shared/ui/team-board';
 
 import { ROUND_MODAL_EXIT_MS, ROUND_MODAL_MS } from './game-page.constants';
-import { formatDraftDuration, getDraftElapsedMs } from './game-page.utils';
+import { formatDraftDuration, getDraftElapsedMs, getTeamDraftThinkingMs } from './game-page.utils';
 import { LineupEditor } from './ui/LineupEditor';
 
 export interface GamePageProps {
@@ -840,6 +840,22 @@ export function GamePage(props: GamePageProps) {
         </div>
       </div>
 
+      <div style={styles.perTeamTimesBar} aria-label="Время на ходах по командам">
+        <div style={styles.perTeamTimesCaption}>Время на ходах</div>
+        <div style={styles.perTeamTimesGrid}>
+          {state.teamOrder.map((teamId) => {
+            const team = state.teams[teamId];
+            const ms = getTeamDraftThinkingMs(state, teamId, now);
+            return (
+              <div key={teamId} style={styles.perTeamTimeCell}>
+                <span style={{ color: schemeAccent(team.colorScheme), fontWeight: 700 }}>{team.name}</span>
+                <span style={styles.perTeamTimeDigits}>{formatDraftDuration(ms)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {!isEditingLineups && roundTurnSequence.length > 0 ? (
         <div className="game-turn-order" aria-label="Очерёдность ходов в этом раунде">
           <div className="game-turn-order-label">Раунд {state.roundIndex} — очередность ходов</div>
@@ -1009,6 +1025,38 @@ function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
     color: '#b8e0ff',
     textShadow: '0 0 20px rgba(100, 180, 255, 0.25)',
     marginTop: 2,
+  },
+  perTeamTimesBar: {
+    padding: isNarrow ? '10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left))' : '10px 18px',
+    borderBottom: '1px solid rgba(255,255,255,0.10)',
+    background: 'rgba(0,0,0,0.12)',
+  },
+  perTeamTimesCaption: {
+    fontSize: 11,
+    fontWeight: 750,
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    opacity: 0.6,
+    marginBottom: 8,
+  },
+  perTeamTimesGrid: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: isNarrow ? 10 : 14,
+    alignItems: 'baseline',
+  },
+  perTeamTimeCell: {
+    display: 'inline-flex',
+    flexDirection: isNarrow ? 'column' : 'row',
+    alignItems: isNarrow ? 'flex-start' : 'baseline',
+    gap: isNarrow ? 2 : 8,
+    minWidth: 0,
+  },
+  perTeamTimeDigits: {
+    fontSize: 15,
+    fontWeight: 800,
+    fontVariantNumeric: 'tabular-nums',
+    opacity: 0.92,
   },
   title: { fontWeight: 750, letterSpacing: -0.2 },
   countryRow: {

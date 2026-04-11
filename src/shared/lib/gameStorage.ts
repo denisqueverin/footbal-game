@@ -139,6 +139,16 @@ function normalizeGameState(state: GameState): GameState {
   const randomPlayerHintsRemaining =
     legacy.randomPlayerHintsRemaining ?? defaultRandomPlayerHintsRemaining(randomBudget)
 
+  const rawDraftTurnAcc = (legacy as { draftTurnAccumMs?: Record<TeamId, number> }).draftTurnAccumMs
+  const draftTurnAccumMs: Record<TeamId, number> =
+    rawDraftTurnAcc &&
+    typeof rawDraftTurnAcc.team1 === 'number' &&
+    typeof rawDraftTurnAcc.team2 === 'number' &&
+    typeof rawDraftTurnAcc.team3 === 'number' &&
+    typeof rawDraftTurnAcc.team4 === 'number'
+      ? rawDraftTurnAcc
+      : { team1: 0, team2: 0, team3: 0, team4: 0 }
+
   const merged: GameState = {
     ...state,
     mode,
@@ -173,10 +183,21 @@ function normalizeGameState(state: GameState): GameState {
     draftTimerStartedAt: state.draftTimerStartedAt ?? null,
     draftTimerPausedAt: state.draftTimerPausedAt ?? null,
     draftTimerPausedAccumMs: state.draftTimerPausedAccumMs ?? 0,
+
+    draftTurnAccumMs,
+    draftTurnSliceStartedAt: null,
   }
+
+  const hasTurnSliceKey = Object.prototype.hasOwnProperty.call(legacy, 'draftTurnSliceStartedAt')
+  const draftTurnSliceStartedAt: number | null = hasTurnSliceKey
+    ? ((legacy as { draftTurnSliceStartedAt: number | null }).draftTurnSliceStartedAt ?? null)
+    : merged.phase === 'drafting' && merged.draftTimerPausedAt == null
+      ? Date.now()
+      : null
 
   return {
     ...merged,
+    draftTurnSliceStartedAt,
     bestLineupIncludeBench: computeBestLineupIncludeBench(merged),
   }
 }
