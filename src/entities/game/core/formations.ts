@@ -134,3 +134,31 @@ export function formationRowsForDisplay(formation: FormationId): FormationRow[] 
   return [...FORMATIONS[formation].rows].reverse()
 }
 
+const FORMATION_ID_LIST = Object.keys(FORMATIONS) as FormationId[]
+
+/** Случайная схема из доступных в игре. */
+export function randomFormationId(): FormationId {
+  return FORMATION_ID_LIST[Math.floor(Math.random() * FORMATION_ID_LIST.length)]!
+}
+
+/**
+ * Сопоставляет текст профиля тренера («4-3-3», «3-5-2») с id схемы в игре («1-4-3-3», «1-3-5-2»).
+ * Скобки и пояснения отбрасываются; если точного совпадения нет — null.
+ */
+export function formationIdFromCoachPriorityLabel(label: string): FormationId | null {
+  const stripped = label.replace(/\([^)]*\)/g, '').trim().replace(/\s+/g, '')
+  if (!stripped) return null
+  const candidates: string[] = []
+  if (stripped.startsWith('1-')) {
+    candidates.push(stripped)
+  } else {
+    candidates.push(`1-${stripped}`)
+  }
+  for (const c of candidates) {
+    if (FORMATION_ID_LIST.includes(c as FormationId)) {
+      return c as FormationId
+    }
+  }
+  return null
+}
+

@@ -16,6 +16,8 @@ export interface DrawRevealPageProps {
   onAssignTeamNames: () => void;
   onContinue: () => void;
   onReset: () => void;
+  /** Текст кнопки после жеребьёвки (по умолчанию — переход к драфту игроков). */
+  continueButtonLabel?: string;
 }
 
 const SPLASH_MS = 10_000;
@@ -107,7 +109,7 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
                 ))}
               </ul>
               <button type="button" className="draw-reveal-cta" onClick={props.onContinue}>
-                Перейти к драфту
+                {props.continueButtonLabel ?? 'Перейти к драфту'}
               </button>
             </div>
           ) : null}

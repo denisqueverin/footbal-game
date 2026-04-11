@@ -1,6 +1,8 @@
+import { coachProfileFor } from '@/entities/game/data/coachProfiles';
 import { assignPlaceholderTeamNames } from '@/entities/game/data/teamNames';
 import { computeBestLineupIncludeBench } from '@/entities/game/core/bestLineupBenchRule';
 import type {
+  CpuDifficultyByTeam,
   DraftSourceKind,
   GameMode,
   GameKind,
@@ -81,6 +83,7 @@ function normalizeGameState(state: GameState): GameState {
     currentDraftSourceKind?: DraftSourceKind | null;
     gameKind?: unknown;
     cpuDifficulty?: unknown;
+    cpuDifficultyByTeam?: unknown;
     teamControllers?: unknown;
   };
 
@@ -112,10 +115,15 @@ function normalizeGameState(state: GameState): GameState {
   const rawLegacyMode = legacy.mode as unknown
   const mode = normalizeMode(legacy.mode ?? state.mode)
   const gameKind = normalizeGameKind(legacy.gameKind ?? state.gameKind)
-  let cpuDifficulty = normalizeCpuDifficulty(legacy.cpuDifficulty ?? state.cpuDifficulty)
+  let legacyCpuSingle = normalizeCpuDifficulty(legacy.cpuDifficulty ?? 'normal')
   if (rawLegacyMode === 'unfair') {
-    cpuDifficulty = 'unfair'
+    legacyCpuSingle = 'unfair'
   }
+
+  const orderEarly =
+    Array.isArray(legacy.teamOrder) && legacy.teamOrder.length >= 2
+      ? (legacy.teamOrder as TeamId[])
+      : state.teamOrder
 
   const normalizeController = (v: unknown): TeamController => (v === 'cpu' ? 'cpu' : 'human')
   const teamControllers: Record<TeamId, TeamController> = {
@@ -128,6 +136,35 @@ function normalizeGameState(state: GameState): GameState {
   if (gameKind === 'vsCpu') {
     teamControllers.team1 = 'human'
     teamControllers.team2 = 'cpu'
+  }
+
+  const baseCpu: CpuDifficultyByTeam = {
+    team1: 'normal',
+    team2: 'normal',
+    team3: 'normal',
+    team4: 'normal',
+  }
+  const rawCpuMap = legacy.cpuDifficultyByTeam
+  let cpuDifficultyByTeam: CpuDifficultyByTeam = { ...baseCpu }
+  if (rawCpuMap && typeof rawCpuMap === 'object') {
+    for (const id of TEAM_IDS) {
+      if (id in (rawCpuMap as object)) {
+        cpuDifficultyByTeam = {
+          ...cpuDifficultyByTeam,
+          [id]: normalizeCpuDifficulty((rawCpuMap as Record<string, unknown>)[id]),
+        }
+      }
+    }
+  } else {
+    for (const id of TEAM_IDS) {
+      const isCpu =
+        gameKind === 'vsCpu' && orderEarly.length === 2
+          ? id === 'team2'
+          : teamControllers[id] === 'cpu'
+      if (isCpu) {
+        cpuDifficultyByTeam = { ...cpuDifficultyByTeam, [id]: legacyCpuSingle }
+      }
+    }
   }
 
   const randomBudget: RandomPlayerHintsBudget = isRandomPlayerHintsBudget(
@@ -153,7 +190,7 @@ function normalizeGameState(state: GameState): GameState {
     ...state,
     mode,
     gameKind,
-    cpuDifficulty,
+    cpuDifficultyByTeam,
     teamControllers,
     hintsBudgetPerPlayer: budget,
     hintsRemaining,
@@ -177,7 +214,37 @@ function normalizeGameState(state: GameState): GameState {
             },
           ]),
         ) as GameState['teams'][TeamId]['picksBySlotId']
-        return [teamId, { ...team, picksBySlotId: nextPicks }]
+        const coachRaw = (team as { coach?: unknown }).coach
+        let coach: GameState['teams'][TeamId]['coach'] = null
+        if (
+          coachRaw &&
+          typeof coachRaw === 'object' &&
+          typeof (coachRaw as { id?: unknown }).id === 'string' &&
+          typeof (coachRaw as { name?: unknown }).name === 'string' &&
+          typeof (coachRaw as { countryRu?: unknown }).countryRu === 'string' &&
+          [2, 3, 4, 5].includes((coachRaw as { stars?: unknown }).stars as number)
+        ) {
+          const c = coachRaw as GameState['teams'][TeamId]['coach'] & {
+            priorityFormation?: unknown
+            strengthsRu?: unknown
+            weaknessesRu?: unknown
+          }
+          const def = coachProfileFor(c.id)
+          coach = {
+            ...c,
+            priorityFormation:
+              typeof c.priorityFormation === 'string' && c.priorityFormation.length > 0
+                ? c.priorityFormation
+                : def.priorityFormation,
+            strengthsRu:
+              typeof c.strengthsRu === 'string' && c.strengthsRu.length > 0 ? c.strengthsRu : def.strengthsRu,
+            weaknessesRu:
+              typeof c.weaknessesRu === 'string' && c.weaknessesRu.length > 0
+                ? c.weaknessesRu
+                : def.weaknessesRu,
+          }
+        }
+        return [teamId, { ...team, picksBySlotId: nextPicks, coach }]
       }),
     ) as GameState['teams'],
     draftTimerStartedAt: state.draftTimerStartedAt ?? null,
@@ -186,6 +253,8 @@ function normalizeGameState(state: GameState): GameState {
 
     draftTurnAccumMs,
     draftTurnSliceStartedAt: null,
+    coachDraft: (state as { coachDraft?: GameState['coachDraft'] }).coachDraft ?? null,
+    formationPick: (state as { formationPick?: GameState['formationPick'] }).formationPick ?? null,
   }
 
   const hasTurnSliceKey = Object.prototype.hasOwnProperty.call(legacy, 'draftTurnSliceStartedAt')
@@ -195,8 +264,42 @@ function normalizeGameState(state: GameState): GameState {
       ? Date.now()
       : null
 
+  const rawCd = merged.coachDraft
+  const coachDraftNormalized: GameState['coachDraft'] = (() => {
+    if (!rawCd) return null
+    const cd = rawCd as GameState['coachDraft'] & {
+      eliminationStepIndex?: number
+      eliminationPickIndex?: number
+      eliminationsCompleted?: number
+    }
+    const n = merged.teamOrder.length
+    const total = 3 * n
+    let eliminationStepIndex =
+      typeof cd.eliminationStepIndex === 'number' && cd.eliminationStepIndex >= 0
+        ? cd.eliminationStepIndex
+        : 0
+    if (typeof cd.eliminationStepIndex !== 'number' && cd.step === 'eliminate') {
+      const ec = typeof cd.eliminationsCompleted === 'number' ? cd.eliminationsCompleted : 0
+      const epi =
+        typeof cd.eliminationPickIndex === 'number' && cd.eliminationPickIndex >= 0
+          ? cd.eliminationPickIndex
+          : 0
+      eliminationStepIndex = Math.min(ec * 3 + Math.min(epi, 2), Math.max(0, total - 1))
+    }
+    let pending = cd.pendingEliminateIds
+    if (pending.length > 1) pending = []
+    return {
+      step: cd.step,
+      pools: cd.pools,
+      eliminationStepIndex,
+      activeIndex: typeof cd.activeIndex === 'number' ? cd.activeIndex : 0,
+      pendingEliminateIds: pending,
+    }
+  })()
+
   return {
     ...merged,
+    coachDraft: coachDraftNormalized,
     draftTurnSliceStartedAt,
     bestLineupIncludeBench: computeBestLineupIncludeBench(merged),
   }
@@ -208,7 +311,7 @@ function isValidGameState(value: unknown): value is GameState {
   }
 
   const state = value as Record<string, unknown>;
-  const phases: GamePhase[] = ['setup', 'drawReveal', 'drafting', 'finished'];
+  const phases: GamePhase[] = ['setup', 'coachDraft', 'formationPick', 'drawReveal', 'drafting', 'finished'];
 
   if (typeof state.phase !== 'string' || !phases.includes(state.phase as GamePhase)) {
     return false;
@@ -258,7 +361,12 @@ export function loadPersistedGameState(): GameState | null {
     }
 
     const normalized = normalizeGameState(parsed.state);
-    if (normalized.phase === 'setup' || normalized.phase === 'drawReveal') {
+    if (
+      normalized.phase === 'setup' ||
+      normalized.phase === 'drawReveal' ||
+      normalized.phase === 'coachDraft' ||
+      normalized.phase === 'formationPick'
+    ) {
       return assignPlaceholderTeamNames(normalized);
     }
     return normalized;

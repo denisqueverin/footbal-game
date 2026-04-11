@@ -15,6 +15,7 @@ import type {
   ColorSchemeId,
   GameKind,
   CpuDifficulty,
+  CpuDifficultyByTeam,
   GameMode,
   HintsBudget,
   RandomPlayerHintsBudget,
@@ -41,19 +42,17 @@ import {
 import { formationLabelShort } from './setup-page.utils';
 
 export interface SetupPageProps {
-  formationLocked: boolean;
   teamOrder: TeamId[];
   teams: Record<TeamId, TeamState>;
   mode: GameMode;
   gameKind: GameKind;
-  cpuDifficulty: CpuDifficulty;
+  cpuDifficultyByTeam: CpuDifficultyByTeam;
   teamControllers: Record<TeamId, TeamController>;
   onSetTeamController: (team: TeamId, controller: TeamController) => void;
-  onSetTeamFormation: (team: TeamId, formation: FormationId) => void;
   onSetTeamColorScheme: (team: TeamId, scheme: ColorSchemeId) => void;
   onSetTeamCount: (count: TeamCount) => void;
   onSetMode: (mode: GameMode) => void;
-  onSetCpuDifficulty: (difficulty: CpuDifficulty) => void;
+  onSetCpuDifficultyForTeam: (team: TeamId, difficulty: CpuDifficulty) => void;
   hintsBudget: HintsBudget;
   onSetHintsBudget: (budget: HintsBudget) => void;
   randomPlayerHintsBudget: RandomPlayerHintsBudget;
@@ -107,6 +106,64 @@ function RandomHintBudgetButton(props: RandomHintBudgetButtonProps) {
   );
 }
 
+function CpuDifficultyButtons(props: {
+  value: CpuDifficulty;
+  devUnlocked: boolean;
+  onPick: (d: CpuDifficulty) => void;
+}) {
+  const rowStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 };
+  return (
+    <div style={rowStyle}>
+      <button
+        type="button"
+        onClick={() => props.onPick('beginner')}
+        style={{
+          ...baseStyles.modeBtn,
+          ...(props.value === 'beginner' ? baseStyles.modeBtnActive : null),
+        }}
+        aria-pressed={props.value === 'beginner'}
+      >
+        Начинающий
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onPick('normal')}
+        style={{
+          ...baseStyles.modeBtn,
+          ...(props.value === 'normal' ? baseStyles.modeBtnActive : null),
+        }}
+        aria-pressed={props.value === 'normal'}
+      >
+        Нормальный
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onPick('hard')}
+        style={{
+          ...baseStyles.modeBtn,
+          ...(props.value === 'hard' ? baseStyles.modeBtnActive : null),
+        }}
+        aria-pressed={props.value === 'hard'}
+      >
+        Хард
+      </button>
+      {props.devUnlocked ? (
+        <button
+          type="button"
+          onClick={() => props.onPick('unfair')}
+          style={{
+            ...baseStyles.modeBtn,
+            ...(props.value === 'unfair' ? baseStyles.modeBtnActive : null),
+          }}
+          aria-pressed={props.value === 'unfair'}
+        >
+          Нечестный
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function CountButton(props: CountButtonProps) {
   return (
     <button
@@ -148,15 +205,75 @@ interface TeamBoxProps {
   colorScheme: ColorSchemeId;
   isFormationDisabled: boolean;
   hideFormationPicker?: boolean;
+  /** Текст под цветами, если сетку выбирают позже */
+  formationDeferredNote?: string;
   /** Узкая вёрстка: одна колонка сетки схем */
   narrowLayout?: boolean;
+  /** Ровная высота карточек в сетке 2×2 (четыре команды). */
+  unifyFourPlayers?: boolean;
   onPickScheme: (scheme: ColorSchemeId) => void;
   onPickFormation: (formation: FormationId) => void;
 }
 
 function TeamBox(props: TeamBoxProps) {
+  const cardShell: CSSProperties = {
+    ...baseStyles.teamBox,
+    ...(props.unifyFourPlayers
+      ? {
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 320,
+          height: '100%',
+          boxSizing: 'border-box',
+        }
+      : null),
+  };
+
+  const bottomGrow: CSSProperties = {
+    flex: '1 1 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    minHeight: 0,
+  };
+
+  const inner =
+    props.hideFormationPicker ? (
+      <div style={baseStyles.muted}>
+        {props.formationDeferredNote ?? 'Схему выберет компьютер при старте игры'}
+      </div>
+    ) : (
+      <div
+        style={{
+          ...baseStyles.formationGrid,
+          gridTemplateColumns: props.narrowLayout ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+        }}
+      >
+        {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
+          <button
+            key={formationId}
+            type="button"
+            onClick={() => props.onPickFormation(formationId)}
+            disabled={props.isFormationDisabled}
+            style={{
+              ...baseStyles.formationCard,
+              ...(props.activeFormation === formationId ? baseStyles.formationCardActive : null),
+              ...(props.isFormationDisabled ? baseStyles.formationCardDisabled : null),
+            }}
+            title={formationLabelShort(formationId)}
+          >
+            <div style={baseStyles.formationCardTop}>
+              <div style={baseStyles.formationName}>{formationLabelShort(formationId)}</div>
+            </div>
+            <FormationPreview formation={formationId} />
+          </button>
+        ))}
+      </div>
+    );
+
   return (
-    <div style={baseStyles.teamBox}>
+    <div style={cardShell}>
       <div style={baseStyles.teamNameDisplay}>{props.teamName}</div>
       <div style={baseStyles.schemeRowWithGap}>
         {SETUP_SCHEME_OPTIONS.map((option) => (
@@ -169,36 +286,7 @@ function TeamBox(props: TeamBoxProps) {
           />
         ))}
       </div>
-      {props.hideFormationPicker ? (
-        <div style={baseStyles.muted}>Схему выберет компьютер при старте игры</div>
-      ) : (
-        <div
-          style={{
-            ...baseStyles.formationGrid,
-            gridTemplateColumns: props.narrowLayout ? '1fr' : 'repeat(2, minmax(0, 1fr))',
-          }}
-        >
-          {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => (
-            <button
-              key={formationId}
-              type="button"
-              onClick={() => props.onPickFormation(formationId)}
-              disabled={props.isFormationDisabled}
-              style={{
-                ...baseStyles.formationCard,
-                ...(props.activeFormation === formationId ? baseStyles.formationCardActive : null),
-                ...(props.isFormationDisabled ? baseStyles.formationCardDisabled : null),
-              }}
-              title={formationLabelShort(formationId)}
-            >
-              <div style={baseStyles.formationCardTop}>
-                <div style={baseStyles.formationName}>{formationLabelShort(formationId)}</div>
-              </div>
-              <FormationPreview formation={formationId} />
-            </button>
-          ))}
-        </div>
-      )}
+      {props.unifyFourPlayers ? <div style={bottomGrow}>{inner}</div> : inner}
     </div>
   );
 }
@@ -210,6 +298,8 @@ export function SetupPage(props: SetupPageProps) {
   const [devModalOpen, setDevModalOpen] = useState(false);
   const [devPassword, setDevPassword] = useState('');
   const isNarrow = useMediaQuery('(max-width: 640px)');
+  const isFourPlayerMulti = props.gameKind === 'multi' && props.teamOrder.length === 4;
+
   const styles = useMemo((): typeof baseStyles => {
     return {
       ...baseStyles,
@@ -232,10 +322,34 @@ export function SetupPage(props: SetupPageProps) {
       h1: { ...baseStyles.h1, fontSize: isNarrow ? 24 : 28 },
       teamFormations: {
         ...baseStyles.teamFormations,
-        gridTemplateColumns: isNarrow ? '1fr' : '1fr 1fr',
+        gridTemplateColumns: isNarrow ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+        ...(isFourPlayerMulti ? { gap: 14, alignItems: 'stretch' } : {}),
       },
+      teamWhoPlaysBox: {
+        ...baseStyles.teamBox,
+        ...(isFourPlayerMulti
+          ? {
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 284,
+              height: '100%',
+              boxSizing: 'border-box',
+            }
+          : {}),
+      },
+      teamWhoPlaysMeta: isFourPlayerMulti
+        ? {
+            marginTop: 10,
+            flex: '1 1 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            gap: 8,
+            minHeight: 132,
+          }
+        : { marginTop: 0 },
     };
-  }, [isNarrow]);
+  }, [isNarrow, isFourPlayerMulti]);
 
   const randomHintsSupported =
     props.mode === 'nationalTop15' ||
@@ -256,10 +370,6 @@ export function SetupPage(props: SetupPageProps) {
     },
     [props.gameKind, props.teamControllers],
   );
-
-  const anyCpuActive = useMemo(() => {
-    return props.teamOrder.some((id) => isCpuTeam(id));
-  }, [isCpuTeam, props.teamOrder]);
 
   /** «11» доступно только в режиме разработки; обычным игрокам — только 1–3. */
   const randomHintBudgetOptions = useMemo((): RandomPlayerHintsBudget[] => {
@@ -287,6 +397,16 @@ export function SetupPage(props: SetupPageProps) {
       props.onSetHintsBudget(3);
     }
   }, [devUnlocked, props.hintsBudget, props.onSetHintsBudget]);
+
+  useEffect(() => {
+    if (devUnlocked) return;
+    for (const id of props.teamOrder) {
+      if (!isCpuTeam(id)) continue;
+      if (props.cpuDifficultyByTeam[id] === 'unfair') {
+        props.onSetCpuDifficultyForTeam(id, 'normal');
+      }
+    }
+  }, [devUnlocked, isCpuTeam, props.cpuDifficultyByTeam, props.onSetCpuDifficultyForTeam, props.teamOrder]);
 
   const handleHintsWith = () => {
     if (!hintsEnabled) {
@@ -502,6 +622,25 @@ export function SetupPage(props: SetupPageProps) {
           </div>
         </div>
 
+        {props.gameKind === 'vsCpu' ? (
+          <div style={styles.section}>
+            <div style={styles.labelRow}>
+              <div style={styles.label}>Сложность компьютера</div>
+              <div style={styles.muted}>
+                Влияет на выбор игроков и тренеров по уровню (★).
+                {devUnlocked
+                  ? ' «Нечестный»: компьютер набирает из общего сильного пула, не из страны или клуба раунда.'
+                  : null}
+              </div>
+            </div>
+            <CpuDifficultyButtons
+              value={props.cpuDifficultyByTeam.team2}
+              devUnlocked={devUnlocked}
+              onPick={(d) => props.onSetCpuDifficultyForTeam('team2', d)}
+            />
+          </div>
+        ) : null}
+
         {props.gameKind === 'multi' ? (
           <div style={styles.section}>
             <div style={styles.labelRow}>
@@ -512,8 +651,28 @@ export function SetupPage(props: SetupPageProps) {
               {props.teamOrder.map((teamId, index) => {
                 const controller = props.teamControllers[teamId] ?? 'human';
                 const cpuDisabled = teamId === 'team1';
+                const whoMeta = (
+                  <>
+                    {controller === 'cpu' ? (
+                      <>
+                        <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
+                        <div>
+                          <div style={styles.labelMuted}>Сложность компьютера</div>
+                          <CpuDifficultyButtons
+                            value={props.cpuDifficultyByTeam[teamId]}
+                            devUnlocked={devUnlocked}
+                            onPick={(d) => props.onSetCpuDifficultyForTeam(teamId, d)}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div style={styles.muted}>Ходы этой команды делаете вы</div>
+                    )}
+                  </>
+                );
+
                 return (
-                  <div key={teamId} style={styles.teamBox}>
+                  <div key={teamId} style={isFourPlayerMulti ? styles.teamWhoPlaysBox : styles.teamBox}>
                     <div style={styles.teamNameDisplay}>Команда {index + 1}</div>
                     <div style={styles.modeRow}>
                       <button
@@ -542,71 +701,26 @@ export function SetupPage(props: SetupPageProps) {
                         Компьютер
                       </button>
                     </div>
-                    {controller === 'cpu' ? (
-                      <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
+                    {isFourPlayerMulti ? (
+                      <div style={styles.teamWhoPlaysMeta}>{whoMeta}</div>
+                    ) : controller === 'cpu' ? (
+                      <>
+                        <div style={styles.muted}>Схему выберет компьютер при старте игры</div>
+                        <div style={{ marginTop: 10 }}>
+                          <div style={styles.labelMuted}>Сложность компьютера</div>
+                          <CpuDifficultyButtons
+                            value={props.cpuDifficultyByTeam[teamId]}
+                            devUnlocked={devUnlocked}
+                            onPick={(d) => props.onSetCpuDifficultyForTeam(teamId, d)}
+                          />
+                        </div>
+                      </>
                     ) : (
                       <div style={styles.muted}>Ходы этой команды делаете вы</div>
                     )}
                   </div>
                 );
               })}
-            </div>
-          </div>
-        ) : null}
-
-        {anyCpuActive ? (
-          <div style={styles.section}>
-            <div style={styles.labelRow}>
-              <div style={styles.label}>Сложность компьютера</div>
-              <div style={styles.muted}>
-                Влияет на выбор игроков по уровню (★). «Нечестный» — компьютер набирает из общего сильного пула, не из страны или клуба раунда
-              </div>
-            </div>
-            <div style={styles.modeRow}>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('beginner')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'beginner' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'beginner'}
-              >
-                Начинающий
-              </button>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('normal')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'normal' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'normal'}
-              >
-                Нормальный
-              </button>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('hard')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'hard' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'hard'}
-              >
-                Хард
-              </button>
-              <button
-                type="button"
-                onClick={() => props.onSetCpuDifficulty('unfair')}
-                style={{
-                  ...styles.modeBtn,
-                  ...(props.cpuDifficulty === 'unfair' ? styles.modeBtnActive : null),
-                }}
-                aria-pressed={props.cpuDifficulty === 'unfair'}
-              >
-                Нечестный
-              </button>
             </div>
           </div>
         ) : null}
@@ -699,8 +813,8 @@ export function SetupPage(props: SetupPageProps) {
 
         <div style={styles.section}>
           <div style={styles.labelRow}>
-            <div style={styles.label}>Схема (каждая команда выбирает свою)</div>
-            {props.formationLocked ? <div style={styles.muted}>Смена схемы заблокирована после первого выбора</div> : null}
+            <div style={styles.label}>Цвет команд</div>
+            <div style={styles.muted}>Схему поля выберете после драфта тренера — с подсказкой по приоритету тренера.</div>
           </div>
           <div style={styles.teamFormations}>
             {props.teamOrder.map((teamId) => {
@@ -714,11 +828,13 @@ export function SetupPage(props: SetupPageProps) {
                   teamName={displayTeamName}
                   activeFormation={team.formation}
                   colorScheme={team.colorScheme}
-                  isFormationDisabled={props.formationLocked || cpu}
-                  hideFormationPicker={cpu}
+                  isFormationDisabled
+                  hideFormationPicker
+                  formationDeferredNote="Схему поля выберете на следующем шаге (после тренера)."
                   narrowLayout={isNarrow}
+                  unifyFourPlayers={isFourPlayerMulti}
                   onPickScheme={(scheme) => props.onSetTeamColorScheme(teamId, scheme)}
-                  onPickFormation={(formation) => props.onSetTeamFormation(teamId, formation)}
+                  onPickFormation={() => {}}
                 />
               );
             })}

@@ -16,7 +16,9 @@ import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 import {
   isChaosMode,
   isClubsMode,
+  isCpuControlledTeam,
   isNationalDraftSource,
+  isUnfairCpuDifficulty,
   supportsBestLineupHint,
 } from '@/entities/game/modes/gameMode';
 import type { DraftSourceKind, GameMode, GameState, TeamId } from '@/entities/game/core/types';
@@ -80,11 +82,14 @@ export interface GamePageProps {
 }
 
 export function GamePage(props: GamePageProps) {
-  const { state } = props;
+  const { state, onConfirmPick, onUseRandomPlayerHint } = props;
   const isNarrow = useMediaQuery('(max-width: 640px)');
   const styles = useMemo(() => getGamePageStyles(isNarrow), [isNarrow]);
   const activeTeam = state.turn;
-  const cpuTurnLockRef = useRef<string | null>(null);
+  const gameStateRef = useRef(state);
+  gameStateRef.current = state;
+  const onConfirmPickRef = useRef(onConfirmPick);
+  onConfirmPickRef.current = onConfirmPick;
 
   const [now, setNow] = useState(() => Date.now());
   const [playerName, setPlayerName] = useState('');
@@ -148,6 +153,14 @@ export function GamePage(props: GamePageProps) {
         ? roundTurnOrder(state.teamOrder, state.draftTurnOrderBase, state.roundIndex)
         : [],
     [state.draftTurnOrderBase, state.roundIndex, state.teamOrder],
+  );
+
+  const nextRoundTurnSequence = useMemo(
+    () =>
+      state.roundIndex > 0 && state.roundIndex < state.maxRounds
+        ? roundTurnOrder(state.teamOrder, state.draftTurnOrderBase, state.roundIndex + 1)
+        : [],
+    [state.draftTurnOrderBase, state.maxRounds, state.roundIndex, state.teamOrder],
   );
 
   const isEditingLineups = state.draftTimerPausedAt != null;
@@ -294,7 +307,7 @@ export function GamePage(props: GamePageProps) {
   const canUseRandomHint =
     !isEditingLineups &&
     state.phase === 'drafting' &&
-    state.teamControllers?.[activeTeam] !== 'cpu' &&
+    !isCpuControlledTeam(state, activeTeam) &&
     state.randomPlayerHintsBudgetPerPlayer > 0 &&
     (state.mode === 'nationalTop15' ||
       state.mode === 'nationalTop30' ||
@@ -308,30 +321,48 @@ export function GamePage(props: GamePageProps) {
 
   const handleUseRandomHint = useCallback(() => {
     if (!slotId) return;
-    props.onUseRandomPlayerHint(activeTeam, slotId);
-  }, [activeTeam, props, slotId]);
+    onUseRandomPlayerHint(activeTeam, slotId);
+  }, [activeTeam, onUseRandomPlayerHint, slotId]);
+
+  /** Стабильный ключ «момента» черновика CPU: меняется при смене раунда/источника/хода/заполненности и настройках, влияющих на выбор. */
+  const cpuDraftEffectId = useMemo(() => {
+    if (state.phase !== 'drafting' || state.draftTimerPausedAt != null) return null;
+    if (!state.currentCountry) return null;
+    const t = state.turn;
+    if (!isCpuControlledTeam(state, t)) return null;
+    const picks = state.teams[t].picksBySlotId;
+    const sig = Object.values(picks)
+      .filter((p) => p.playerName)
+      .map((p) => p.slotId)
+      .sort()
+      .join(',');
+    const chaos = state.mode === 'chaos' ? String(state.currentDraftSourceKind ?? '') : '';
+    const diff = String(state.cpuDifficultyByTeam[t] ?? '');
+    return `${state.roundIndex}|${state.currentCountry}|${t}|${sig}|${state.mode}|${chaos}|${diff}`;
+  }, [
+    state.phase,
+    state.draftTimerPausedAt,
+    state.roundIndex,
+    state.currentCountry,
+    state.turn,
+    state.mode,
+    state.currentDraftSourceKind,
+    state.gameKind,
+    state.teamOrder,
+    state.teamControllers,
+    state.cpuDifficultyByTeam,
+    state.teams,
+  ]);
 
   // Ход компьютера: выбираем слот -> 3с лоадер -> подсветка -> подтверждение -> передача хода.
   useEffect(() => {
-    const isEditingLineups = state.draftTimerPausedAt != null;
-    const isCpuTurn =
-      state.phase === 'drafting' &&
-      !isEditingLineups &&
-      state.teamControllers?.[state.turn] === 'cpu' &&
-      Boolean(state.currentCountry);
+    if (cpuDraftEffectId == null) return;
 
-    if (!isCpuTurn) return;
+    /** Пока на экране интро раунда (страна/клуб), не показываем лоадер выбора CPU. */
+    if (roundModalOpen || roundModalExiting) return;
 
+    const state = gameStateRef.current;
     const cpuTeamId: TeamId = state.turn;
-    const lockKey = `${state.roundIndex}:${state.currentCountry ?? ''}:${state.turn}:${Object.values(
-      state.teams[cpuTeamId].picksBySlotId,
-    )
-      .filter((p) => p.playerName)
-      .map((p) => p.slotId)
-      .join(',')}`;
-    if (cpuTurnLockRef.current === lockKey) return;
-    cpuTurnLockRef.current = lockKey;
-
     const source = state.currentCountry;
     if (!source) return;
 
@@ -344,7 +375,7 @@ export function GamePage(props: GamePageProps) {
     let picked: { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null = null;
     let chosen = emptySlots[0]!;
 
-    if (state.cpuDifficulty === 'unfair') {
+    if (isUnfairCpuDifficulty(state.cpuDifficultyByTeam[cpuTeamId])) {
       const shuffled = [...emptySlots].sort(() => Math.random() - 0.5);
       let best: {
         slot: (typeof emptySlots)[number];
@@ -408,7 +439,7 @@ export function GamePage(props: GamePageProps) {
       return { name: picked.playerName, stars: picked.stars };
     };
 
-    const difficulty = state.cpuDifficulty;
+    const difficulty = state.cpuDifficultyByTeam[cpuTeamId];
 
     const pickRandomAny = (): { name: string; stars: 1 | 2 | 3 | 4 | 5 } | null => {
       const any =
@@ -755,20 +786,36 @@ export function GamePage(props: GamePageProps) {
     setCpuPending({ slotId: chosen.slotId, pickedName, pickedStars });
 
     // 2) Через 3 секунды — подсветить слот.
+    let t2: number | null = null;
     const t1 = window.setTimeout(() => {
       setCpuPending(null);
       setSlotId(chosen.slotId);
 
       // 3) Небольшая пауза, чтобы подсветка была заметна, затем подтвердить выбор и передать ход.
-      const t2 = window.setTimeout(() => {
-        props.onConfirmPick(cpuTeamId, chosen.slotId, pickedName, pickedStars, 'cpu');
+      t2 = window.setTimeout(() => {
+        t2 = null;
+        onConfirmPickRef.current(cpuTeamId, chosen.slotId, pickedName, pickedStars, 'cpu');
       }, 250);
-
-      return () => window.clearTimeout(t2);
     }, 3000);
 
-    return () => window.clearTimeout(t1);
-  }, [props, state]);
+    return () => {
+      window.clearTimeout(t1);
+      if (t2 != null) window.clearTimeout(t2);
+    };
+  }, [cpuDraftEffectId, roundModalExiting, roundModalOpen]);
+
+  const draftTimePills = state.teamOrder.map((teamId) => {
+    const team = state.teams[teamId];
+    const ms = getTeamDraftThinkingMs(state, teamId, now);
+    return (
+      <span key={teamId} className="game-turn-order-draft-time-pill">
+        <span className="game-turn-order-draft-time-name" style={{ color: schemeAccent(team.colorScheme) }}>
+          {team.name}
+        </span>
+        <span className="game-turn-order-draft-time-val">{formatDraftDuration(ms)}</span>
+      </span>
+    );
+  });
 
   return (
     <div style={styles.page}>
@@ -840,41 +887,61 @@ export function GamePage(props: GamePageProps) {
         </div>
       </div>
 
-      <div style={styles.perTeamTimesBar} aria-label="Время на ходах по командам">
-        <div style={styles.perTeamTimesCaption}>Время на ходах</div>
-        <div style={styles.perTeamTimesGrid}>
-          {state.teamOrder.map((teamId) => {
-            const team = state.teams[teamId];
-            const ms = getTeamDraftThinkingMs(state, teamId, now);
-            return (
-              <div key={teamId} style={styles.perTeamTimeCell}>
-                <span style={{ color: schemeAccent(team.colorScheme), fontWeight: 700 }}>{team.name}</span>
-                <span style={styles.perTeamTimeDigits}>{formatDraftDuration(ms)}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {!isEditingLineups && roundTurnSequence.length > 0 ? (
-        <div className="game-turn-order" aria-label="Очерёдность ходов в этом раунде">
-          <div className="game-turn-order-label">Раунд {state.roundIndex} — очередность ходов</div>
-          <div className="game-turn-order-chips">
-            {roundTurnSequence.map((teamId, index) => {
-              const team = state.teams[teamId];
-              const isActive = state.turn === teamId;
+        <div className="game-turn-order" aria-label="Очерёдность ходов в раундах">
+          <div className="game-turn-order-layout">
+            <div className="game-turn-order-main">
+              <div className="game-turn-order-rounds-row">
+                <div className="game-turn-order-segment">
+                  <div className="game-turn-order-label">
+                    Раунд {state.roundIndex} — очередность ходов
+                  </div>
+                  <div className="game-turn-order-chips">
+                    {roundTurnSequence.map((teamId, index) => {
+                      const team = state.teams[teamId];
+                      const isActive = state.turn === teamId;
 
-              return (
-                <span
-                  key={`${state.roundIndex}-${teamId}-${index}`}
-                  className={`game-turn-chip${isActive ? ' game-turn-chip--active' : ''}`}
-                  style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
-                >
-                  <span className="game-turn-chip-num">{index + 1}</span>
-                  {team.name}
-                </span>
-              );
-            })}
+                      return (
+                        <span
+                          key={`${state.roundIndex}-${teamId}-${index}`}
+                          className={`game-turn-chip${isActive ? ' game-turn-chip--active' : ''}`}
+                          style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
+                        >
+                          <span className="game-turn-chip-num">{index + 1}</span>
+                          {team.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+                {nextRoundTurnSequence.length > 0 ? (
+                  <div className="game-turn-order-segment game-turn-order-segment--next">
+                    <div className="game-turn-order-label game-turn-order-label--next">
+                      Следующий раунд — очередность ходов
+                    </div>
+                    <div className="game-turn-order-chips game-turn-order-chips--muted">
+                      {nextRoundTurnSequence.map((teamId, index) => {
+                        const team = state.teams[teamId];
+
+                        return (
+                          <span
+                            key={`next-${state.roundIndex + 1}-${teamId}-${index}`}
+                            className="game-turn-chip game-turn-chip--next-preview"
+                            style={{ ['--chip-accent' as string]: schemeAccent(team.colorScheme) }}
+                          >
+                            <span className="game-turn-chip-num">{index + 1}</span>
+                            {team.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="game-turn-order-times" aria-label="Время на ходах по командам">
+              {draftTimePills}
+            </div>
           </div>
         </div>
       ) : null}
@@ -884,6 +951,14 @@ export function GamePage(props: GamePageProps) {
       ) : (
         <>
           <div style={styles.bottom}>
+            {roundTurnSequence.length === 0 ? (
+              <div
+                className="game-turn-order-draft-times game-turn-order-draft-times--in-bottom"
+                aria-label="Время на ходах по командам"
+              >
+                {draftTimePills}
+              </div>
+            ) : null}
             <div style={styles.formRow}>
               <input
                 value={playerName}
@@ -942,41 +1017,44 @@ export function GamePage(props: GamePageProps) {
               Выберите свободный слот на поле ниже и введите имя игрока, затем нажмите «Подтвердить».
             </div>
           </div>
-          <div style={styles.boards}>
-            {state.teamOrder.map((teamId) => (
-              <div key={teamId} style={styles.side}>
-                <TeamBoard
-                  team={state.teams[teamId]}
-                  formation={state.teams[teamId].formation}
-                  mode={state.mode}
-                  selectedSlotId={activeTeam === teamId ? slotId : null}
-                  onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
-                  disabled={activeTeam !== teamId}
-                  pendingPick={
-                    state.teamControllers?.[teamId] === 'cpu' &&
-                    state.turn === teamId &&
-                    cpuPending != null
-                      ? { slotId: cpuPending.slotId }
-                      : null
-                  }
-                  bestLineupHint={
-                    supportsBestLineupHint(state.mode) &&
-                    state.hintsBudgetPerPlayer > 0 &&
-                    state.phase === 'drafting' &&
-                    !isEditingLineups &&
-                    Boolean(state.currentCountry)
-                      ? {
-                          remaining: state.hintsRemaining[teamId],
-                          budget: state.hintsBudgetPerPlayer,
-                          usedThisRound: state.hintUsedThisRound[teamId],
-                          onRequest: () => handleBestLineupRequest(teamId),
-                        }
-                      : null
-                  }
-                />
-                {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
-              </div>
-            ))}
+          <div style={styles.draftMain}>
+            <div style={styles.boards}>
+              {state.teamOrder.map((teamId) => (
+                <div key={teamId} style={styles.side}>
+                  <TeamBoard
+                    team={state.teams[teamId]}
+                    formation={state.teams[teamId].formation}
+                    mode={state.mode}
+                    selectedSlotId={activeTeam === teamId ? slotId : null}
+                    onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
+                    disabled={activeTeam !== teamId}
+                    pendingPick={
+                      state.teamControllers?.[teamId] === 'cpu' &&
+                      state.turn === teamId &&
+                      cpuPending != null
+                        ? { slotId: cpuPending.slotId }
+                        : null
+                    }
+                    bestLineupHint={
+                      supportsBestLineupHint(state.mode) &&
+                      state.hintsBudgetPerPlayer > 0 &&
+                      state.phase === 'drafting' &&
+                      !isEditingLineups &&
+                      Boolean(state.currentCountry) &&
+                      !isCpuControlledTeam(state, teamId)
+                        ? {
+                            remaining: state.hintsRemaining[teamId],
+                            budget: state.hintsBudgetPerPlayer,
+                            usedThisRound: state.hintUsedThisRound[teamId],
+                            onRequest: () => handleBestLineupRequest(teamId),
+                          }
+                        : null
+                    }
+                  />
+                  {activeTeam !== teamId ? <div style={styles.overlay} aria-hidden="true" /> : null}
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -994,7 +1072,7 @@ export function GamePage(props: GamePageProps) {
 
 function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
   return {
-  page: { minHeight: '100vh', display: 'flex', flexDirection: 'column' },
+  page: { minHeight: '100dvh', display: 'flex', flexDirection: 'column' },
   topbar: {
     display: 'grid',
     gridTemplateColumns: isNarrow ? '1fr' : '1fr auto 1fr',
@@ -1025,38 +1103,6 @@ function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
     color: '#b8e0ff',
     textShadow: '0 0 20px rgba(100, 180, 255, 0.25)',
     marginTop: 2,
-  },
-  perTeamTimesBar: {
-    padding: isNarrow ? '10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left))' : '10px 18px',
-    borderBottom: '1px solid rgba(255,255,255,0.10)',
-    background: 'rgba(0,0,0,0.12)',
-  },
-  perTeamTimesCaption: {
-    fontSize: 11,
-    fontWeight: 750,
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    opacity: 0.6,
-    marginBottom: 8,
-  },
-  perTeamTimesGrid: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: isNarrow ? 10 : 14,
-    alignItems: 'baseline',
-  },
-  perTeamTimeCell: {
-    display: 'inline-flex',
-    flexDirection: isNarrow ? 'column' : 'row',
-    alignItems: isNarrow ? 'flex-start' : 'baseline',
-    gap: isNarrow ? 2 : 8,
-    minWidth: 0,
-  },
-  perTeamTimeDigits: {
-    fontSize: 15,
-    fontWeight: 800,
-    fontVariantNumeric: 'tabular-nums',
-    opacity: 0.92,
   },
   title: { fontWeight: 750, letterSpacing: -0.2 },
   countryRow: {
@@ -1103,19 +1149,36 @@ function getGamePageStyles(isNarrow: boolean): Record<string, CSSProperties> {
     fontWeight: 750,
     boxShadow: '0 2px 14px rgba(60, 200, 120, 0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
   },
+  draftMain: {
+    flex: '1 1 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
   boards: {
     flex: '1 1 auto',
+    minHeight: 0,
+    maxHeight: isNarrow
+      ? 'calc(100dvh - min(300px, 58dvh))'
+      : 'calc(100dvh - min(320px, 46dvh))',
+    overflow: 'auto',
     display: 'grid',
     gridTemplateColumns: isNarrow
       ? '1fr'
       : 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
-    gap: isNarrow ? 12 : 14,
+    gap: isNarrow ? 10 : 12,
     padding: isNarrow
-      ? '10px max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left))'
-      : '14px 14px max(14px, env(safe-area-inset-bottom)) 14px',
+      ? '8px max(8px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left))'
+      : '10px 12px max(12px, env(safe-area-inset-bottom)) 12px',
     alignItems: 'stretch',
   },
-  side: { position: 'relative', minHeight: isNarrow ? 280 : 360 },
+  side: {
+    position: 'relative',
+    minHeight: 0,
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+  },
   overlay: {
     position: 'absolute',
     inset: 0,
