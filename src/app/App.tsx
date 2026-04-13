@@ -14,7 +14,6 @@ import type {
   TeamId,
 } from '@/entities/game/core/types';
 
-import { CaptainPickPage } from '@/pages/captain-pick-page/CaptainPickPage';
 import { CoachDraftPage } from '@/pages/coach-draft-page/CoachDraftPage';
 import { FormationPickPage } from '@/pages/formation-pick-page/FormationPickPage';
 import { DrawRevealPage } from '@/pages/draw-reveal-page';
@@ -172,10 +171,6 @@ export function App() {
         onStart={handleSetupStart}
       />
     );
-  } else if (state.phase === 'captainPick') {
-    page = (
-      <CaptainPickPage state={state} onSelectCaptain={handleCaptainPickSelect} onReset={handleGameReset} />
-    );
   } else if (state.phase === 'finished') {
     page = <ResultPage state={state} onReset={handleGameReset} />;
   } else if (state.phase === 'drawReveal') {
@@ -220,6 +215,7 @@ export function App() {
         onUseBestLineupHint={handleUseBestLineupHint}
         onUseRandomPlayerHint={handleUseRandomPlayerHint}
         onClearRandomPlayerHintError={handleClearRandomPlayerHintError}
+        onSelectCaptain={handleCaptainPickSelect}
       />
     );
   }

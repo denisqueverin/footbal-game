@@ -104,22 +104,6 @@ function buildResultExportText(state: GameState): string {
   return lines.join('\n');
 }
 
-function cn(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(' ');
-}
-
-function resultCoachTierClass(stars: number): string {
-  if (stars === 5) return 'result-team-coach--tier-gold';
-  if (stars === 4) return 'result-team-coach--tier-silver';
-  return '';
-}
-
-function resultItemTierClass(stars: 1 | 2 | 3 | 4 | 5 | null | undefined): string {
-  if (stars === 5) return 'result-item--tier-gold';
-  if (stars === 4) return 'result-item--tier-silver';
-  return '';
-}
-
 interface TeamSummaryProps {
   title: string;
   colorScheme: ColorSchemeId;
@@ -151,7 +135,7 @@ function TeamSummary(props: TeamSummaryProps) {
       <div className="result-team-time">Время на ходах: {formatDraftDuration(props.turnTimeMs)}</div>
       {props.coach ? (
         <>
-          <div className={cn('result-team-coach', resultCoachTierClass(props.coach.stars))}>
+          <div className="result-team-coach">
             {getCountryFlagUrlRu(props.coach.countryRu) ? (
               <img
                 src={getCountryFlagUrlRu(props.coach.countryRu)!}
@@ -182,7 +166,7 @@ function TeamSummary(props: TeamSummaryProps) {
             const isCaptain = cell.slotId === props.captainSlotId;
 
             return (
-              <div key={cell.slotId} className={cn('result-item', resultItemTierClass(pick?.playerStars))}>
+              <div key={cell.slotId} className="result-item">
                 <span className="result-badge" style={{ borderColor: accent }}>
                   {cell.label}
                 </span>
@@ -230,7 +214,7 @@ export function ResultPage(props: ResultPageProps) {
         onConfirm={props.onReset}
       />
       <div className="result-card">
-        <div className="setup-kicker" style={{ marginBottom: 12 }}>
+        <div className="setup-kicker result-kicker">
           <span className="setup-kicker-icon" aria-hidden="true">
             🏆
           </span>
@@ -238,7 +222,7 @@ export function ResultPage(props: ResultPageProps) {
         </div>
         <h1 className="result-title">Игра завершена</h1>
         <p className="result-sub">
-          Итоги по командам и выбранным схемам. Ниже — суммарное время на ходах и тренеры команд.
+          Составы, капитаны, время на ходах — скопируйте блок ниже для симуляции в чате.
         </p>
 
         <div

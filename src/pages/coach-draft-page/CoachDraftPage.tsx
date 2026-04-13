@@ -18,6 +18,7 @@ import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 import { KitSchemeIcon } from '@/shared/ui/kit-scheme-icon/KitSchemeIcon';
 
 const CPU_COACH_THINK_MS = 3000;
+const CPU_ELIMINATE_HIGHLIGHT_MS = 1000;
 
 /** Стабильная ссылка: иначе `useCallback(handleCpu)` меняется каждый рендер и сбрасывает таймер CPU. */
 const EMPTY_COACH_POOL: readonly CoachAssignment[] = [];
@@ -74,6 +75,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
   const cd = state.coachDraft;
   const [resetOpen, setResetOpen] = useState(false);
   const [cpuThinking, setCpuThinking] = useState(false);
+  const [cpuEliminateHighlightCoachId, setCpuEliminateHighlightCoachId] = useState<string | null>(null);
   const cpuLockRef = useRef<string | null>(null);
   const thinkTimerRef = useRef<number | null>(null);
 
@@ -162,16 +164,16 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
       const lock = `${cd.step}-${cd.eliminationStepIndex}-${victimPool.map((c) => c.id).join(',')}`;
       if (cpuLockRef.current === lock) return;
       cpuLockRef.current = lock;
-      setCpuThinking(true);
+      const id = pickCpuEliminateOneCoachId(
+        victimPool,
+        pickerTeam ? state.cpuDifficultyByTeam[pickerTeam] : 'normal',
+      );
+      setCpuEliminateHighlightCoachId(id);
       thinkTimerRef.current = window.setTimeout(() => {
         thinkTimerRef.current = null;
-        const id = pickCpuEliminateOneCoachId(
-          victimPool,
-          pickerTeam ? state.cpuDifficultyByTeam[pickerTeam] : 'normal',
-        );
+        setCpuEliminateHighlightCoachId(null);
         props.onEliminateCoach(id);
-        setCpuThinking(false);
-      }, CPU_COACH_THINK_MS);
+      }, CPU_ELIMINATE_HIGHLIGHT_MS);
       return;
     }
     if (cd.step === 'pick') {
@@ -204,6 +206,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
   useEffect(() => {
     cpuLockRef.current = null;
     setCpuThinking(false);
+    setCpuEliminateHighlightCoachId(null);
     if (thinkTimerRef.current != null) {
       window.clearTimeout(thinkTimerRef.current);
       thinkTimerRef.current = null;
@@ -313,9 +316,9 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
               </div>
             ) : null}
             <div className="coach-draft-hint">
-              Нажмите на карточку тренера в колонке «у этой команды убирают», чтобы снять его с драфта. Очередь
-              соперников меняется по кругу (сначала у соседа в списке, затем у следующего и т.д.), чтобы снимали у
-              разных команд. У всех команд разные тренеры в пулах; сильные и слабые стороны — только на финале.
+              В свой ход нажмите на карточку тренера в колонке соперника с жёлтой обводкой. Очередь соперников
+              меняется по кругу (сначала у соседа в списке, затем у следующего и т.д.). У всех команд разные тренеры
+              в пулах; сильные и слабые стороны — только на финале.
             </div>
             <div
               className={`coach-draft-pools-row${fourTeamsLayout ? ' coach-draft-pools-row--four' : ''}`}
@@ -326,7 +329,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                 const isPickerCol = pickerTeam != null && teamId === pickerTeam;
                 const scheme = state.teams[teamId].colorScheme;
                 const poolHint = isVictim
-                  ? ' — у этой команды убирают тренера'
+                  ? ''
                   : isPickerCol
                     ? ' — сейчас этот игрок убирает'
                     : ' — кандидаты команды';
@@ -355,7 +358,11 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                                 if (!canClick) return;
                                 props.onEliminateCoach(c.id);
                               }}
-                              className={cn('coach-draft-cardbtn', coachCardStarTierClass(c.stars))}
+                              className={cn(
+                                'coach-draft-cardbtn',
+                                coachCardStarTierClass(c.stars),
+                                cpuEliminateHighlightCoachId === c.id && 'coach-draft-cardbtn--cpu-eliminate-highlight',
+                              )}
                             >
                               {flag ? (
                                 <img src={flag} alt="" className="coach-draft-flag" width={34} height={22} />

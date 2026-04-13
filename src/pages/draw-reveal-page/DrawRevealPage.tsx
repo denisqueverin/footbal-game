@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { pickRandomLoadingPhrases } from '@/entities/game/data/loadingPhrases';
-import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
-import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 import { roundTurnOrder } from '@/entities/game/core/turnOrder';
-import type { ColorSchemeId, DraftSourceKind, GameMode, GameState, TeamId } from '@/entities/game/core/types';
+import type { ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
 import { canAdvanceFromDrawRevealIdentity } from '@/entities/game/core/drawRevealIdentity';
 
 import { APP_VERSION } from '@/shared/config/version';
@@ -29,26 +27,6 @@ const SPLASH_MS_DEFAULT = 10_000;
 /** В режиме разработки (чекбокс при старте) — короче ждать перед экраном жеребьёвки. */
 const SPLASH_MS_DEV_TOOLS = 5_000;
 
-function loadingFlagUrlForLabel(
-  label: string,
-  mode: GameMode,
-  chaosKind: DraftSourceKind | undefined,
-): string | null {
-  if (mode === 'nationalTop15' || mode === 'nationalTop30') {
-    return getCountryFlagUrlRu(label);
-  }
-  if (mode === 'clubs' || mode === 'rpl') {
-    return getClubFlagUrl(label);
-  }
-  if (mode === 'chaos') {
-    if (chaosKind === 'national') {
-      return getCountryFlagUrlRu(label);
-    }
-    return getClubFlagUrl(label);
-  }
-  return null;
-}
-
 export function DrawRevealPage(props: DrawRevealPageProps) {
   const { state } = props;
   const splashMs = state.devToolsEnabled ? SPLASH_MS_DEV_TOOLS : SPLASH_MS_DEFAULT;
@@ -63,22 +41,6 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
   );
 
   const loadingPhrases = useMemo(() => pickRandomLoadingPhrases(), []);
-
-  const loadingFlagItems = useMemo(() => {
-    const labels = state.countriesAll;
-    const kinds = state.chaosDraftSourceKindsAll;
-    const { mode } = state;
-    return labels
-      .map((label, i) => {
-        const chaosKind = mode === 'chaos' ? kinds[i] : undefined;
-        const url = loadingFlagUrlForLabel(label, mode, chaosKind);
-        if (!url) {
-          return null;
-        }
-        return { key: `draw-reveal-flag-${i}`, url, title: label };
-      })
-      .filter((item): item is { key: string; url: string; title: string } => item != null);
-  }, [state.chaosDraftSourceKindsAll, state.countriesAll, state.mode]);
 
   const rafRef = useRef(0);
 
@@ -138,21 +100,6 @@ export function DrawRevealPage(props: DrawRevealPageProps) {
               <div className="draw-reveal-progress">
                 <div className="draw-reveal-progress-bar" style={{ transform: `scaleX(${progress})` }} />
               </div>
-              {loadingFlagItems.length > 0 ? (
-                <div className="draw-reveal-loading-flags" aria-label="Страны и клубы в этой партии">
-                  {loadingFlagItems.map((item) => (
-                    <img
-                      key={item.key}
-                      src={item.url}
-                      alt=""
-                      className="draw-reveal-loading-flag"
-                      title={item.title}
-                      width={36}
-                      height={24}
-                    />
-                  ))}
-                </div>
-              ) : null}
               <div className="draw-reveal-phrase-slot" aria-live="polite" aria-atomic="true">
                 <p className="draw-reveal-phrase" style={{ opacity: phraseState.opacity }}>
                   {currentPhrase}

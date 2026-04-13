@@ -12,18 +12,6 @@ import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 
 const CPU_FORMATION_THINK_MS = 900;
 
-const FORMATION_IDS = Object.keys(FORMATIONS) as FormationId[];
-
-function scrollFormationCardIntoView(
-  viewport: HTMLElement | null,
-  formationId: FormationId,
-  behavior: ScrollBehavior,
-) {
-  if (!viewport) return;
-  const el = viewport.querySelector<HTMLElement>(`[data-formation-card="${formationId}"]`);
-  el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior });
-}
-
 export interface FormationPickPageProps {
   state: GameState;
   onSelectFormation: (formation: FormationId) => void;
@@ -37,7 +25,6 @@ export function FormationPickPage(props: FormationPickPageProps) {
   const [cpuThinking, setCpuThinking] = useState(false);
   const lockRef = useRef<string | null>(null);
   const timerRef = useRef<number | null>(null);
-  const carouselViewportRef = useRef<HTMLDivElement | null>(null);
 
   const order = state.teamOrder;
   const activeTeam = fp ? order[fp.activeIndex] : null;
@@ -103,23 +90,6 @@ export function FormationPickPage(props: FormationPickPageProps) {
     };
   }, []);
 
-  /** Показать в карусели схему, с которой логично начать выбор (приоритет тренера или первая). */
-  useEffect(() => {
-    if (isCpuTurn || !fp) return;
-    const target = priorityFormation ?? FORMATION_IDS[0];
-    const id = window.requestAnimationFrame(() => {
-      scrollFormationCardIntoView(carouselViewportRef.current, target, 'smooth');
-    });
-    return () => cancelAnimationFrame(id);
-  }, [fp, isCpuTurn, priorityFormation]);
-
-  const scrollCarouselBy = useCallback((dir: -1 | 1) => {
-    const el = carouselViewportRef.current;
-    if (!el) return;
-    const step = Math.max(120, el.clientWidth * 0.42) * dir;
-    el.scrollBy({ left: step, behavior: 'smooth' });
-  }, []);
-
   if (!fp || !activeTeam || !team) {
     return null;
   }
@@ -133,75 +103,55 @@ export function FormationPickPage(props: FormationPickPageProps) {
       />
       <div className="formation-pick-shell">
         <div className="formation-pick-version">v{APP_VERSION}</div>
-        <h1 className="formation-pick-title">Выбор схемы поля</h1>
-        <p className="formation-pick-sub">
-          <span className="formation-pick-actor">
-            {displayName}
-            {isCpuTurn ? (
-              <CpuDifficultyIcon difficulty={state.cpuDifficultyByTeam[activeTeam]} />
+        <div className="formation-pick-lead">
+          <h1 className="formation-pick-title">Выбор схемы поля</h1>
+          <p className="formation-pick-sub">
+            <span className="formation-pick-actor">
+              {displayName}
+              {isCpuTurn ? (
+                <CpuDifficultyIcon difficulty={state.cpuDifficultyByTeam[activeTeam]} />
+              ) : null}
+            </span>
+            : выберите расстановку. У тренера <strong>{coach?.name ?? '—'}</strong> приоритетная схема в
+            карьере — <strong>{coach?.priorityFormation ?? '—'}</strong>
+            {priorityFormation
+              ? ' (совпадает с одной из сеток ниже — отмечена короной).'
+              : ' (нет точного совпадения с доступными сетками).'}
+          </p>
+          <div className="formation-pick-cpu-slot" aria-live="polite">
+            {isCpuTurn && cpuThinking ? (
+              <div className="formation-pick-cpu-thinking">
+                <span className="formation-pick-cpu-spinner" aria-hidden="true" />
+                Компьютер выбирает схему…
+              </div>
             ) : null}
-          </span>
-          : выберите расстановку. У тренера <strong>{coach?.name ?? '—'}</strong> приоритетная схема в
-          карьере — <strong>{coach?.priorityFormation ?? '—'}</strong>
-          {priorityFormation ? ' (совпадает с одной из сеток ниже — отмечена короной).' : ' (нет точного совпадения с доступными сетками).'}
-        </p>
-
-        {isCpuTurn && cpuThinking ? (
-          <div className="formation-pick-cpu-thinking" aria-live="polite">
-            <span className="formation-pick-cpu-spinner" aria-hidden="true" />
-            Компьютер выбирает схему…
           </div>
-        ) : null}
+        </div>
 
-        <div className="formation-pick-carousel-shell">
-          <button
-            type="button"
-            className="formation-pick-carousel-nav"
-            aria-label="Прокрутить схемы влево"
-            onClick={() => scrollCarouselBy(-1)}
-          >
-            ‹
-          </button>
-          <div ref={carouselViewportRef} className="formation-pick-carousel-viewport">
-            <div className="formation-pick-carousel-track">
-              {FORMATION_IDS.map((formationId) => {
-                const isPriority = priorityFormation === formationId;
-                const canClick = !isCpuTurn;
-                return (
-                  <button
-                    key={formationId}
-                    type="button"
-                    data-formation-card={formationId}
-                    disabled={!canClick}
-                    onClick={() => canClick && props.onSelectFormation(formationId)}
-                    onFocus={() => {
-                      if (isCpuTurn) return;
-                      scrollFormationCardIntoView(carouselViewportRef.current, formationId, 'smooth');
-                    }}
-                    className={`formation-pick-cardbtn formation-pick-cardbtn--carousel${isPriority ? ' formation-pick-cardbtn--priority' : ''}`}
-                  >
-                    <div className="formation-pick-cardbtn-top">
-                      <span className="formation-pick-cardbtn-name">{formationLabelShort(formationId)}</span>
-                      {isPriority ? (
-                        <span className="formation-pick-crown" title="Приоритетная схема тренера">
-                          👑
-                        </span>
-                      ) : null}
-                    </div>
-                    <FormationPreview formation={formationId} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="formation-pick-carousel-nav"
-            aria-label="Прокрутить схемы вправо"
-            onClick={() => scrollCarouselBy(1)}
-          >
-            ›
-          </button>
+        <div className="formation-pick-grid">
+          {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => {
+            const isPriority = priorityFormation === formationId;
+            const canClick = !isCpuTurn;
+            return (
+              <button
+                key={formationId}
+                type="button"
+                disabled={!canClick}
+                onClick={() => canClick && props.onSelectFormation(formationId)}
+                className={`formation-pick-cardbtn${isPriority ? ' formation-pick-cardbtn--priority' : ''}`}
+              >
+                <div className="formation-pick-cardbtn-top">
+                  <span className="formation-pick-cardbtn-name">{formationLabelShort(formationId)}</span>
+                  {isPriority ? (
+                    <span className="formation-pick-crown" title="Приоритетная схема тренера">
+                      👑
+                    </span>
+                  ) : null}
+                </div>
+                <FormationPreview formation={formationId} />
+              </button>
+            );
+          })}
         </div>
 
         <div className="formation-pick-foot">

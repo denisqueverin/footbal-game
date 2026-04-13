@@ -78,6 +78,8 @@ export interface TeamBoardProps {
   cpuDifficulty?: CpuDifficulty | null;
   /** Подпись в шапке (например, с префиксом «Нейро »). Если не задано — `team.name`. */
   teamDisplayName?: string;
+  /** Фаза выбора капитана: клик по занятому слоту (только у активной доски, `disabled === false`). */
+  captainPickOnSlot?: (slotId: string) => void;
 }
 
 export function TeamBoard(props: TeamBoardProps) {
@@ -181,6 +183,64 @@ export function TeamBoard(props: TeamBoardProps) {
                   !isPending;
 
                 const starTier = isTaken ? slotPlayerStarTierClass(pick?.playerStars) : '';
+
+                const captainPick = props.captainPickOnSlot;
+                if (captainPick) {
+                  if (isTaken && pick?.playerName) {
+                    return (
+                      <button
+                        key={cell.slotId}
+                        type="button"
+                        className={cn(
+                          'team-board-slot',
+                          'team-board-slot--taken',
+                          'team-board-slot--captain-pick',
+                          starTier,
+                        )}
+                        onClick={() => captainPick(cell.slotId)}
+                        title="Назначить капитаном"
+                        aria-label={`Капитан: ${pick.playerName}, позиция ${cell.label}`}
+                      >
+                        <div className="team-board-slot-label">{cell.label}</div>
+                        <div className="team-board-slot-name">
+                          <span className="team-board-name-wrap">
+                            <span>{pick.playerName}</span>
+                          </span>
+                        </div>
+                        <div className="team-board-slot-meta">
+                          {sourceLabel ? <span>{sourceLabel}</span> : null}
+                          {flagUrl ? (
+                            <img src={flagUrl} alt="" className="team-board-flag" width={18} height={12} loading="lazy" />
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  }
+                  return (
+                    <div
+                      key={cell.slotId}
+                      className={cn(
+                        'team-board-slot',
+                        'team-board-slot--disabled',
+                        'team-board-slot--captain-pick-empty',
+                      )}
+                      aria-hidden
+                    >
+                      <div className="team-board-slot-label">{cell.label}</div>
+                      <div className="team-board-slot-name">
+                        <span className="team-board-name-wrap">
+                          <span>{pick?.playerName ?? '—'}</span>
+                        </span>
+                      </div>
+                      <div className="team-board-slot-meta">
+                        {sourceLabel ? <span>{sourceLabel}</span> : null}
+                        {flagUrl ? (
+                          <img src={flagUrl} alt="" className="team-board-flag" width={18} height={12} loading="lazy" />
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                }
 
                 if (isEditingFilledName) {
                   return (

@@ -44,9 +44,11 @@ export function ConfirmNewGameModal(props: ConfirmNewGameModalProps) {
         aria-labelledby="confirm-new-game-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <button type="button" className="round-modal-close" aria-label="Закрыть" onClick={props.onClose}>
-          ×
-        </button>
+        <div className="round-modal-close-wrap">
+          <button type="button" className="round-modal-close" aria-label="Закрыть" onClick={props.onClose}>
+            ×
+          </button>
+        </div>
         <div className="round-modal-body">
           <p id="confirm-new-game-title" className="confirm-new-game-text">
             Вы точно хотите закончить игру? Текущий прогресс будет потерян
