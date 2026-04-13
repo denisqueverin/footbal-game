@@ -1,4 +1,5 @@
-import type { ColorSchemeId, GameMode, HintsBudget, TeamCount } from '@/entities/game/core/types';
+import { SETUP_COLOR_SCHEME_PICKS } from '@/entities/game/core/colorSchemes';
+import type { GameMode, HintsBudget, TeamCount } from '@/entities/game/core/types';
 
 export const SETUP_TEAM_COUNTS: readonly TeamCount[] = [1, 2, 3, 4];
 
@@ -38,9 +39,4 @@ export const SETUP_MODE_GROUP_DESCRIPTIONS: Record<SetupModeGroupId, string> = {
     'Хаос: тип источника в раундах меняется — могут выпадать сборные, европейские клубы или РПЛ. Сочетает правила разных режимов в одной партии',
 };
 
-export const SETUP_SCHEME_OPTIONS: ReadonlyArray<{ id: ColorSchemeId; label: string }> = [
-  { id: 'green', label: 'Зелёная' },
-  { id: 'red', label: 'Красная' },
-  { id: 'blue', label: 'Синяя' },
-  { id: 'white', label: 'Белая' },
-];
+export const SETUP_SCHEME_OPTIONS = SETUP_COLOR_SCHEME_PICKS;

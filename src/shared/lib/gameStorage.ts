@@ -1,9 +1,15 @@
 import { coachProfileFor } from '@/entities/game/data/coachProfiles';
 import { assignPlaceholderTeamNames } from '@/entities/game/data/teamNames';
+import { pickCpuCaptainSlotId } from '@/entities/game/core/captainUtils';
 import { coachDraftEliminationTotalSteps } from '@/entities/game/core/coachDraftPhase';
 import { computeBestLineupIncludeBench } from '@/entities/game/core/bestLineupBenchRule';
+import {
+  dedupeColorSchemesForActiveOrder,
+  normalizeColorSchemeId,
+} from '@/entities/game/core/colorSchemes';
 import type {
   CpuDifficultyByTeam,
+  DevNeuroTeamNameMode,
   DraftSourceKind,
   GameMode,
   GameKind,
@@ -15,6 +21,7 @@ import type {
   TeamController,
   TeamId,
 } from '@/entities/game/core/types';
+import { isCpuControlledTeam, stripNeuroNamePrefix } from '@/entities/game/modes/gameMode';
 
 import { APP_VERSION } from '@/shared/config/version';
 
@@ -26,6 +33,22 @@ export type PersistedGamePayload = {
 };
 
 const TEAM_IDS: TeamId[] = ['team1', 'team2', 'team3', 'team4'];
+
+/** Старые сохранения без капитана: подставляем слот по умолчанию, чтобы промпт и итоги были полными. */
+function applyLegacyCaptainDefaults(state: GameState): GameState {
+  if (state.phase !== 'finished') return state;
+  let teams = { ...state.teams };
+  let changed = false;
+  for (const id of state.teamOrder) {
+    const t = teams[id]!;
+    if (t.captainSlotId != null) continue;
+    const slot = pickCpuCaptainSlotId(t);
+    if (!slot) continue;
+    teams = { ...teams, [id]: { ...t, captainSlotId: slot } };
+    changed = true;
+  }
+  return changed ? { ...state, teams } : state;
+}
 
 function isHintsBudget(n: number): n is HintsBudget {
   return n === 0 || n === 1 || n === 2 || n === 3 || n === 11;
@@ -187,8 +210,18 @@ function normalizeGameState(state: GameState): GameState {
       ? rawDraftTurnAcc
       : { team1: 0, team2: 0, team3: 0, team4: 0 }
 
+  const rawDevTools = (legacy as { devToolsEnabled?: unknown }).devToolsEnabled
+  const devToolsEnabled = typeof rawDevTools === 'boolean' ? rawDevTools : false
+
+  const rawNeuroMode = (legacy as { devNeuroTeamNameMode?: unknown }).devNeuroTeamNameMode
+  const devNeuroTeamNameMode: DevNeuroTeamNameMode = rawNeuroMode === 'manual' ? 'manual' : 'generate'
+
+  const neuroNameCtx = { gameKind, teamOrder: orderEarly, teamControllers }
+
   const merged: GameState = {
     ...state,
+    devToolsEnabled,
+    devNeuroTeamNameMode,
     mode,
     gameKind,
     cpuDifficultyByTeam,
@@ -245,7 +278,24 @@ function normalizeGameState(state: GameState): GameState {
                 : def.weaknessesRu,
           }
         }
-        return [teamId, { ...team, picksBySlotId: nextPicks, coach }]
+        const rawTeamName = typeof team.name === 'string' ? team.name : ''
+        const normalizedTeamName = isCpuControlledTeam(neuroNameCtx, teamId)
+          ? stripNeuroNamePrefix(rawTeamName)
+          : rawTeamName
+        return [
+          teamId,
+          {
+            ...team,
+            name: normalizedTeamName,
+            picksBySlotId: nextPicks,
+            coach,
+            colorScheme: normalizeColorSchemeId(team.colorScheme),
+            captainSlotId:
+              typeof (team as { captainSlotId?: unknown }).captainSlotId === 'string'
+                ? (team as { captainSlotId: string }).captainSlotId
+                : null,
+          },
+        ]
       }),
     ) as GameState['teams'],
     draftTimerStartedAt: state.draftTimerStartedAt ?? null,
@@ -256,6 +306,7 @@ function normalizeGameState(state: GameState): GameState {
     draftTurnSliceStartedAt: null,
     coachDraft: (state as { coachDraft?: GameState['coachDraft'] }).coachDraft ?? null,
     formationPick: (state as { formationPick?: GameState['formationPick'] }).formationPick ?? null,
+    captainPick: (state as { captainPick?: GameState['captainPick'] }).captainPick ?? null,
   }
 
   const hasTurnSliceKey = Object.prototype.hasOwnProperty.call(legacy, 'draftTurnSliceStartedAt')
@@ -298,11 +349,15 @@ function normalizeGameState(state: GameState): GameState {
     }
   })()
 
+  const teamsDeduped = dedupeColorSchemesForActiveOrder(merged.teams, merged.teamOrder)
+
+  const withTeams = applyLegacyCaptainDefaults({ ...merged, teams: teamsDeduped })
+
   return {
-    ...merged,
+    ...withTeams,
     coachDraft: coachDraftNormalized,
     draftTurnSliceStartedAt,
-    bestLineupIncludeBench: computeBestLineupIncludeBench(merged),
+    bestLineupIncludeBench: computeBestLineupIncludeBench(withTeams),
   }
 }
 
@@ -312,7 +367,15 @@ function isValidGameState(value: unknown): value is GameState {
   }
 
   const state = value as Record<string, unknown>;
-  const phases: GamePhase[] = ['setup', 'coachDraft', 'formationPick', 'drawReveal', 'drafting', 'finished'];
+  const phases: GamePhase[] = [
+    'setup',
+    'coachDraft',
+    'formationPick',
+    'drawReveal',
+    'drafting',
+    'captainPick',
+    'finished',
+  ];
 
   if (typeof state.phase !== 'string' || !phases.includes(state.phase as GamePhase)) {
     return false;
@@ -362,12 +425,8 @@ export function loadPersistedGameState(): GameState | null {
     }
 
     const normalized = normalizeGameState(parsed.state);
-    if (
-      normalized.phase === 'setup' ||
-      normalized.phase === 'drawReveal' ||
-      normalized.phase === 'coachDraft' ||
-      normalized.phase === 'formationPick'
-    ) {
+    /** Только настройка: у неактивных слотов могли остаться чужие имена; после жеребьёвки имена не сбрасываем. */
+    if (normalized.phase === 'setup') {
       return assignPlaceholderTeamNames(normalized);
     }
     return normalized;

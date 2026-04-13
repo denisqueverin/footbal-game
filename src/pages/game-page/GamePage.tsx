@@ -6,6 +6,7 @@ import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import { roundTurnOrder } from '@/entities/game/core/turnOrder';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
 import {
+  formatTeamDisplayName,
   isChaosMode,
   isClubsMode,
   isCpuControlledTeam,
@@ -96,6 +97,10 @@ export function GamePage(props: GamePageProps) {
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   /** Панель «очередность + время»: по умолчанию свёрнута; развернуть — кнопка «Очередь и время». */
   const [turnOrderPanelOpen, setTurnOrderPanelOpen] = useState(false);
+  /** Правка имени уже выбранного игрока (карандаш на слоте). */
+  const [pickedFilledEdit, setPickedFilledEdit] = useState<null | { teamId: TeamId; slotId: string; draft: string }>(
+    null,
+  );
   const turnOrderPanelContentId = useId();
   const isNarrowTurnPanel = useMediaQuery('(max-width: 640px)');
   const roundModalTimersRef = useRef<{ exit?: number; hide?: number }>({});
@@ -158,7 +163,33 @@ export function GamePage(props: GamePageProps) {
     [state.draftTurnOrderBase, state.maxRounds, state.roundIndex, state.teamOrder],
   );
 
+  const teamNameCtx = useMemo(
+    () => ({
+      gameKind: state.gameKind,
+      teamOrder: state.teamOrder,
+      teamControllers: state.teamControllers,
+    }),
+    [state.gameKind, state.teamOrder, state.teamControllers],
+  );
+
+  const teamDisplayName = useCallback(
+    (teamId: TeamId) => formatTeamDisplayName(teamNameCtx, teamId, state.teams[teamId].name),
+    [teamNameCtx, state.teams],
+  );
+
   const isEditingLineups = state.draftTimerPausedAt != null;
+
+  useEffect(() => {
+    if (state.phase !== 'drafting') {
+      setPickedFilledEdit(null);
+    }
+  }, [state.phase]);
+
+  useEffect(() => {
+    if (isEditingLineups) {
+      setPickedFilledEdit(null);
+    }
+  }, [isEditingLineups]);
 
   const draftElapsedMs = useMemo(() => getDraftElapsedMs(state, now), [state, now]);
 
@@ -187,7 +218,12 @@ export function GamePage(props: GamePageProps) {
 
   useEffect(() => {
     setSlotId(null);
+    setPlayerName('');
   }, [activeTeam]);
+
+  useEffect(() => {
+    setPlayerName('');
+  }, [slotId]);
 
   /** Сразу убираем интро с экрана при входе в редактирование (до paint — без «вспышки» модалки). */
   useLayoutEffect(() => {
@@ -246,26 +282,6 @@ export function GamePage(props: GamePageProps) {
     setSlotId(null);
   }, [activeTeam, playerName, props.onConfirmPick, slotId]);
 
-  const handlePlayerNameChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setPlayerName(event.target.value);
-  }, []);
-
-  const handlePlayerNameKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== 'Enter') {
-        return;
-      }
-
-      if (!canConfirm) {
-        return;
-      }
-
-      event.preventDefault();
-      handleConfirmPick();
-    },
-    [canConfirm, handleConfirmPick],
-  );
-
   const handleResetClick = useCallback(() => {
     setResetConfirmOpen(true);
   }, []);
@@ -282,6 +298,28 @@ export function GamePage(props: GamePageProps) {
       props.onSetDraftTimerPaused(true);
     }
   }, [isEditingLineups, props]);
+
+  const openFilledPickEdit = useCallback((teamId: TeamId, slotId: string) => {
+    const name = state.teams[teamId].picksBySlotId[slotId]?.playerName;
+    if (!name) return;
+    setPickedFilledEdit({ teamId, slotId, draft: name });
+  }, [state.teams]);
+
+  const closeFilledPickEdit = useCallback(() => {
+    setPickedFilledEdit(null);
+  }, []);
+
+  const updateFilledPickDraft = useCallback((value: string) => {
+    setPickedFilledEdit((prev) => (prev ? { ...prev, draft: value } : null));
+  }, []);
+
+  const saveFilledPickEdit = useCallback(() => {
+    if (!pickedFilledEdit) return;
+    const trimmed = pickedFilledEdit.draft.trim();
+    if (!trimmed) return;
+    props.onSetPickPlayerName(pickedFilledEdit.teamId, pickedFilledEdit.slotId, trimmed);
+    setPickedFilledEdit(null);
+  }, [pickedFilledEdit, props]);
 
   const handleLineupPickNameChange = useCallback(
     (team: TeamId, slotId: string, name: string) => {
@@ -300,6 +338,7 @@ export function GamePage(props: GamePageProps) {
 
   const randomHintRemaining = state.randomPlayerHintsRemaining[activeTeam] ?? 0;
   const canUseRandomHint =
+    pickedFilledEdit == null &&
     !isEditingLineups &&
     state.phase === 'drafting' &&
     !isCpuControlledTeam(state, activeTeam) &&
@@ -806,7 +845,7 @@ export function GamePage(props: GamePageProps) {
     return (
       <span key={teamId} className="game-turn-order-draft-time-pill">
         <span className="game-turn-order-draft-time-name" style={{ color: schemeAccent(team.colorScheme) }}>
-          {team.name}
+          {teamDisplayName(teamId)}
           {cpuDiff != null ? (
             <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-order-draft-time-diff" />
           ) : null}
@@ -834,6 +873,7 @@ export function GamePage(props: GamePageProps) {
         sourceLabel={state.currentCountry ?? ''}
         mode={state.mode}
         draftSourceKind={isChaosMode(state.mode) ? state.currentDraftSourceKind : null}
+        autoCloseMs={ROUND_MODAL_MS}
         onClose={handleCloseRoundModal}
       />
       <ConfirmNewGameModal
@@ -871,13 +911,15 @@ export function GamePage(props: GamePageProps) {
 
         <div className="game-topbar-right">
           {!isEditingLineups ? <span className="game-version-tag">v{APP_VERSION}</span> : null}
-          <button
-            type="button"
-            onClick={handleToggleEditLineups}
-            className={isEditingLineups ? 'game-edit-done-btn' : 'game-ghost-btn'}
-          >
-            {isEditingLineups ? 'Завершить редактирование' : 'Редактировать составы'}
-          </button>
+          {state.devToolsEnabled ? (
+            <button
+              type="button"
+              onClick={handleToggleEditLineups}
+              className={isEditingLineups ? 'game-edit-done-btn' : 'game-ghost-btn'}
+            >
+              {isEditingLineups ? 'Завершить редактирование' : 'Редактировать составы'}
+            </button>
+          ) : null}
           <button type="button" onClick={handleResetClick} className="game-ghost-btn">
             Новая игра
           </button>
@@ -896,7 +938,7 @@ export function GamePage(props: GamePageProps) {
                 ·
               </span>
               <span className="game-turn-order-summary-turn">
-                Ход: <strong>{state.teams[state.turn].name}</strong>
+                Ход: <strong>{teamDisplayName(state.turn)}</strong>
                 {isCpuControlledTeam(state, state.turn) ? (
                   <CpuDifficultyIcon
                     difficulty={state.cpuDifficultyByTeam[state.turn]}
@@ -927,7 +969,6 @@ export function GamePage(props: GamePageProps) {
                   <p className="game-turn-order-narrow-order">
                     <span className="game-turn-order-narrow-kicker">Ход: </span>
                     {roundTurnSequence.map((teamId, index) => {
-                      const team = state.teams[teamId];
                       const isActive = state.turn === teamId;
                       const sep = index > 0 ? ' - ' : null;
                       const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
@@ -936,7 +977,7 @@ export function GamePage(props: GamePageProps) {
                         <span key={`${state.roundIndex}-${teamId}-${index}`}>
                           {sep}
                           <span className="game-turn-order-name-with-diff">
-                            {isActive ? <strong>{team.name}</strong> : team.name}
+                            {isActive ? <strong>{teamDisplayName(teamId)}</strong> : teamDisplayName(teamId)}
                             {cpuDiff != null ? (
                               <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-order-inline-diff" />
                             ) : null}
@@ -954,7 +995,6 @@ export function GamePage(props: GamePageProps) {
                     <p className="game-turn-order-narrow-order game-turn-order-narrow-order--next">
                       <span className="game-turn-order-narrow-kicker">Ход: </span>
                       {nextRoundTurnSequence.map((teamId, index) => {
-                        const team = state.teams[teamId];
                         const sep = index > 0 ? ' - ' : null;
                         const cpuDiff = isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null;
 
@@ -962,7 +1002,7 @@ export function GamePage(props: GamePageProps) {
                           <span key={`next-${state.roundIndex + 1}-${teamId}-${index}`}>
                             {sep}
                             <span className="game-turn-order-name-with-diff">
-                              {team.name}
+                              {teamDisplayName(teamId)}
                               {cpuDiff != null ? (
                                 <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-order-inline-diff" />
                               ) : null}
@@ -997,7 +1037,7 @@ export function GamePage(props: GamePageProps) {
                             >
                               <span className="game-turn-chip-num">{index + 1}</span>
                               <span className="game-turn-chip-name-row">
-                                {team.name}
+                                {teamDisplayName(teamId)}
                                 {cpuDiff != null ? (
                                   <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-chip-diff" />
                                 ) : null}
@@ -1025,7 +1065,7 @@ export function GamePage(props: GamePageProps) {
                               >
                                 <span className="game-turn-chip-num">{index + 1}</span>
                                 <span className="game-turn-chip-name-row">
-                                  {team.name}
+                                  {teamDisplayName(teamId)}
                                   {cpuDiff != null ? (
                                     <CpuDifficultyIcon difficulty={cpuDiff} className="game-turn-chip-diff" />
                                   ) : null}
@@ -1060,68 +1100,60 @@ export function GamePage(props: GamePageProps) {
                 {draftTimePills}
               </div>
             ) : null}
-            <div className="game-form-row">
-              <input
-                value={playerName}
-                onChange={handlePlayerNameChange}
-                onKeyDown={handlePlayerNameKeyDown}
-                placeholder={isCpuActiveTurn ? 'Ход компьютера…' : 'Имя футболиста (свободный ввод)'}
-                className="game-input"
-                disabled={isCpuActiveTurn}
-              />
-              <div className="game-slot-preview">
-                Слот: <b>{slotId ?? 'не выбран'}</b>
-              </div>
-              {state.mode === 'nationalTop15' ||
-              state.mode === 'nationalTop30' ||
-              state.mode === 'rpl' ||
-              state.mode === 'clubs' ||
-              state.mode === 'chaos' ? (
-                <button
-                  type="button"
-                  onClick={handleUseRandomHint}
-                  disabled={!canUseRandomHint}
-                  className="game-random-hint-btn"
-                  title={
-                    canUseRandomHint
-                      ? 'Поставить случайного игрока этой позиции из текущей сборной'
-                      : randomHintRemaining <= 0
-                        ? 'Подсказки «Случайный игрок» закончились'
-                        : !slotId
-                          ? 'Сначала выберите слот'
-                          : activeSlotTaken
-                            ? 'Слот уже занят'
-                            : !state.currentCountry
-                              ? 'Нет текущей сборной для раунда'
-                              : undefined
-                  }
-                >
-                  Случайный игрок ({randomHintRemaining})
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleConfirmPick}
-                disabled={!canConfirm}
-                className="game-confirm-btn"
-              >
-                Подтвердить
-              </button>
-            </div>
             <p className="game-hint">
-              Выберите свободный слот на поле ниже и введите имя игрока, затем нажмите «Подтвердить».
+              {isCpuActiveTurn
+                ? 'Ход компьютера…'
+                : 'Нажмите на свободную позицию на поле, введите имя в ячейке и нажмите ✓. Подсказка «случайный игрок» — кнопка с ? в ячейке (если доступна).'}
             </p>
           </div>
           <div className="game-draft-main">
-            <div className="game-boards">
+            <div
+              className="game-boards"
+              style={{ ['--game-board-cols' as string]: String(state.teamOrder.length) }}
+            >
               {state.teamOrder.map((teamId) => (
                 <div key={teamId} className="game-side">
                   <TeamBoard
                     team={state.teams[teamId]}
+                    teamDisplayName={teamDisplayName(teamId)}
                     formation={state.teams[teamId].formation}
                     mode={state.mode}
                     selectedSlotId={activeTeam === teamId ? slotId : null}
                     onSelectSlot={activeTeam === teamId ? setSlotId : undefined}
+                    slotDraftEditor={
+                      activeTeam === teamId && !isCpuActiveTurn && slotId
+                        ? {
+                            slotId,
+                            value: playerName,
+                            onChange: setPlayerName,
+                            onConfirm: handleConfirmPick,
+                            confirmDisabled: !canConfirm,
+                            onRandom:
+                              state.mode === 'nationalTop15' ||
+                              state.mode === 'nationalTop30' ||
+                              state.mode === 'rpl' ||
+                              state.mode === 'clubs' ||
+                              state.mode === 'chaos'
+                                ? handleUseRandomHint
+                                : undefined,
+                            randomDisabled: !canUseRandomHint,
+                            randomTitle: canUseRandomHint
+                              ? 'Поставить случайного игрока этой позиции из текущей сборной'
+                              : randomHintRemaining <= 0
+                                ? 'Подсказки «Случайный игрок» закончились'
+                                : !slotId
+                                  ? 'Сначала выберите слот'
+                                  : activeSlotTaken
+                                    ? 'Слот уже занят'
+                                    : !state.currentCountry
+                                      ? 'Нет текущей сборной для раунда'
+                                      : 'Подсказка недоступна',
+                            confirmTitle: canConfirm
+                              ? 'Подтвердить выбор'
+                              : 'Введите имя игрока',
+                          }
+                        : null
+                    }
                     disabled={activeTeam !== teamId}
                     cpuDifficulty={
                       isCpuControlledTeam(state, teamId) ? state.cpuDifficultyByTeam[teamId] : null
@@ -1133,11 +1165,29 @@ export function GamePage(props: GamePageProps) {
                         ? { slotId: cpuPending.slotId }
                         : null
                     }
+                    onRequestEditFilledPick={
+                      state.phase === 'drafting' && !isEditingLineups
+                        ? (sid) => openFilledPickEdit(teamId, sid)
+                        : undefined
+                    }
+                    filledPickEditor={
+                      pickedFilledEdit?.teamId === teamId
+                        ? {
+                            slotId: pickedFilledEdit.slotId,
+                            value: pickedFilledEdit.draft,
+                            onChange: updateFilledPickDraft,
+                            onSave: saveFilledPickEdit,
+                            onCancel: closeFilledPickEdit,
+                            saveDisabled: pickedFilledEdit.draft.trim().length === 0,
+                          }
+                        : null
+                    }
                     bestLineupHint={
                       supportsBestLineupHint(state.mode) &&
                       state.hintsBudgetPerPlayer > 0 &&
                       state.phase === 'drafting' &&
                       !isEditingLineups &&
+                      pickedFilledEdit == null &&
                       Boolean(state.currentCountry) &&
                       !isCpuControlledTeam(state, teamId)
                         ? {
@@ -1149,7 +1199,9 @@ export function GamePage(props: GamePageProps) {
                         : null
                     }
                   />
-                  {activeTeam !== teamId ? <div className="game-side-overlay" aria-hidden="true" /> : null}
+                  {activeTeam !== teamId && pickedFilledEdit == null ? (
+                    <div className="game-side-overlay" aria-hidden="true" />
+                  ) : null}
                 </div>
               ))}
             </div>

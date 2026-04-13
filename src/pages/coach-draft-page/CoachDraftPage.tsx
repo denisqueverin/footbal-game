@@ -6,41 +6,36 @@ import {
   coachDraftPickerAtStep,
   coachDraftVictimAtStep,
 } from '@/entities/game/core/coachDraftPhase';
-import type { CoachAssignment, ColorSchemeId, GameState, TeamId } from '@/entities/game/core/types';
+import type { CoachAssignment, GameState, TeamId } from '@/entities/game/core/types';
 import { pickCpuEliminateOneCoachId, pickCpuFinalCoachId } from '@/entities/game/data/coaches';
-import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
+import { formatTeamDisplayName, isCpuControlledTeam } from '@/entities/game/modes/gameMode';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
-import {
-  schemeAccent,
-  schemeLabelRu,
-  schemePanelBackground,
-  schemePanelTextColor,
-  schemeShortRu,
-} from '@/shared/lib/schemeAccent';
+import { schemeLabelRu } from '@/shared/lib/schemeAccent';
 
 import { APP_VERSION } from '@/shared/config/version';
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
+import { KitSchemeIcon } from '@/shared/ui/kit-scheme-icon/KitSchemeIcon';
 
 const CPU_COACH_THINK_MS = 3000;
 
 /** Стабильная ссылка: иначе `useCallback(handleCpu)` меняется каждый рендер и сбрасывает таймер CPU. */
 const EMPTY_COACH_POOL: readonly CoachAssignment[] = [];
 
-function coachDraftPoolBlockStyle(colorScheme: ColorSchemeId): CSSProperties {
-  return {
-    borderColor: schemeAccent(colorScheme),
-    background: schemePanelBackground(colorScheme),
-    color: schemePanelTextColor(colorScheme),
-  };
+function cn(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ');
 }
 
-function coachFlowPillStyle(colorScheme: ColorSchemeId): CSSProperties {
-  return {
-    border: `1px solid ${schemeAccent(colorScheme)}`,
-    background: schemePanelBackground(colorScheme),
-    color: schemePanelTextColor(colorScheme),
-  };
+function coachCardStarTierClass(stars: number): string {
+  if (stars === 5) return 'coach-draft-cardbtn--tier-gold';
+  if (stars === 4) return 'coach-draft-cardbtn--tier-silver';
+  return '';
+}
+
+function coachDoneHeadTierClass(stars: number): string {
+  if (stars === 5) return 'coach-draft-pool-done-head--tier-gold';
+  if (stars === 4) return 'coach-draft-pool-done-head--tier-silver';
+  return '';
 }
 
 function CoachDraftCardProfile({
@@ -83,6 +78,21 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
   const thinkTimerRef = useRef<number | null>(null);
 
   const order = state.teamOrder;
+
+  const teamCtx = useMemo(
+    () => ({
+      gameKind: state.gameKind,
+      teamOrder: state.teamOrder,
+      teamControllers: state.teamControllers,
+    }),
+    [state.gameKind, state.teamOrder, state.teamControllers],
+  );
+
+  const teamLabel = useCallback(
+    (tid: TeamId) => formatTeamDisplayName(teamCtx, tid, state.teams[tid].name),
+    [teamCtx, state.teams],
+  );
+
   const activeTeam = cd ? order[cd.activeIndex] : null;
   const victimTeam =
     cd && cd.step === 'eliminate' ? coachDraftVictimAtStep(order, cd.eliminationStepIndex) : null;
@@ -131,15 +141,15 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
   const subtitle = useMemo(() => {
     if (!cd) return '';
     if (cd.step === 'eliminate' && victimTeam && pickerTeam) {
-      const vName = state.teams[victimTeam].name;
-      const pName = state.teams[pickerTeam].name;
+      const vName = teamLabel(victimTeam);
+      const pName = teamLabel(pickerTeam);
       return `${pName} убирает одного тренера из списка «${vName}» (шаг ${cd.eliminationStepIndex + 1} из ${coachDraftEliminationTotalSteps(order.length)}). Останется двое.`;
     }
     if (cd.step === 'pick' && activeTeam) {
-      return `${state.teams[activeTeam].name}: выберите одного тренера из двух — он появится на схеме команды.`;
+      return `${teamLabel(activeTeam)}: выберите одного тренера из двух — он появится на схеме команды.`;
     }
     return '';
-  }, [cd, activeTeam, victimTeam, pickerTeam, state.teams, order.length]);
+  }, [cd, activeTeam, victimTeam, pickerTeam, teamLabel, order.length]);
 
   const handleCpu = useCallback(() => {
     if (!cd || !isCpuTurn) return;
@@ -232,9 +242,9 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
             {cd.step === 'eliminate' && pickerTeam && victimTeam ? (
               <p className="coach-draft-current-pair" aria-live="polite">
                 <span className="coach-draft-current-pair-kicker">Сейчас: </span>
-                <strong className="coach-draft-current-pair-picker">{state.teams[pickerTeam].name}</strong>
+                <strong className="coach-draft-current-pair-picker">{teamLabel(pickerTeam)}</strong>
                 <span className="coach-draft-current-pair-mid"> убирает у </span>
-                <strong className="coach-draft-current-pair-victim">{state.teams[victimTeam].name}</strong>
+                <strong className="coach-draft-current-pair-victim">{teamLabel(victimTeam)}</strong>
               </p>
             ) : cd.step === 'pick' ? (
               <p className="coach-draft-current-pair coach-draft-current-pair--muted">
@@ -274,21 +284,26 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                       <div
                         key={sIdx}
                         className={`coach-draft-flow-slot${isCurrent ? ' coach-draft-flow-slot--current' : ''}`}
-                        title={`Шаг ${sIdx + 1}: ${pTeam.name} → ${vTeam.name}`}
+                        title={`Шаг ${sIdx + 1}: ${teamLabel(row.picker)} → ${teamLabel(row.victim)}`}
                       >
                         <span className="coach-draft-flow-step-idx">{sIdx + 1}</span>
                         <div className="coach-draft-flow-cell">
-                          <span className="coach-draft-flow-pill" style={coachFlowPillStyle(pTeam.colorScheme)}>
-                            {schemeShortRu(pTeam.colorScheme)}
+                          <span
+                            className="coach-draft-flow-pill"
+                            title={schemeLabelRu(pTeam.colorScheme)}
+                            aria-label={schemeLabelRu(pTeam.colorScheme)}
+                          >
+                            <KitSchemeIcon schemeId={pTeam.colorScheme} className="coach-draft-flow-kit-icon" />
                           </span>
                           <span className="coach-draft-flow-mid" aria-hidden="true">
                             →
                           </span>
                           <span
                             className="coach-draft-flow-pill coach-draft-flow-pill--victim"
-                            style={coachFlowPillStyle(vTeam.colorScheme)}
+                            title={schemeLabelRu(vTeam.colorScheme)}
+                            aria-label={schemeLabelRu(vTeam.colorScheme)}
                           >
-                            {schemeShortRu(vTeam.colorScheme)}
+                            <KitSchemeIcon schemeId={vTeam.colorScheme} className="coach-draft-flow-kit-icon" />
                           </span>
                         </div>
                       </div>
@@ -310,7 +325,6 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                 const isVictim = teamId === victimTeam;
                 const isPickerCol = pickerTeam != null && teamId === pickerTeam;
                 const scheme = state.teams[teamId].colorScheme;
-                const accent = schemeAccent(scheme);
                 const poolHint = isVictim
                   ? ' — у этой команды убирают тренера'
                   : isPickerCol
@@ -320,11 +334,10 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                   <div
                     key={teamId}
                     className={`coach-draft-pool-block${isVictim ? ' coach-draft-pool-block--victim' : ' coach-draft-pool-block--eliminate-bystander'}${isPickerCol ? ' coach-draft-pool-block--picker-turn' : ''}`}
-                    style={coachDraftPoolBlockStyle(scheme)}
                     aria-disabled={!isVictim}
                   >
                     <div className="coach-draft-pool-label">
-                      {state.teams[teamId].name}
+                      {teamLabel(teamId)}
                       <span className="coach-draft-pool-scheme"> · {schemeLabelRu(scheme)}</span>
                       {poolHint}
                     </div>
@@ -342,16 +355,13 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                                 if (!canClick) return;
                                 props.onEliminateCoach(c.id);
                               }}
-                              className="coach-draft-cardbtn"
-                              style={{ ['--coach-accent' as string]: accent }}
+                              className={cn('coach-draft-cardbtn', coachCardStarTierClass(c.stars))}
                             >
                               {flag ? (
                                 <img src={flag} alt="" className="coach-draft-flag" width={34} height={22} />
                               ) : null}
                               <div className="coach-draft-name">{c.name}</div>
-                              <div className="coach-draft-meta">
-                                {c.countryRu} · {c.stars}★
-                              </div>
+                              <div className="coach-draft-meta">{c.countryRu}</div>
                               <CoachDraftCardProfile coach={c} variant="eliminate" />
                             </button>
                           );
@@ -359,16 +369,13 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                         return (
                           <div
                             key={c.id}
-                            className="coach-draft-cardbtn coach-draft-cardbtn--readonly"
-                            style={{ ['--coach-accent' as string]: accent }}
+                            className={cn('coach-draft-cardbtn coach-draft-cardbtn--readonly', coachCardStarTierClass(c.stars))}
                           >
                             {flag ? (
                               <img src={flag} alt="" className="coach-draft-flag" width={34} height={22} />
                             ) : null}
                             <div className="coach-draft-name">{c.name}</div>
-                            <div className="coach-draft-meta">
-                              {c.countryRu} · {c.stars}★
-                            </div>
+                            <div className="coach-draft-meta">{c.countryRu}</div>
                             <CoachDraftCardProfile coach={c} variant="eliminate" />
                           </div>
                         );
@@ -390,7 +397,6 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                 const pool = cd.pools[teamId] ?? EMPTY_COACH_POOL;
                 const isActivePicker = teamId === activeTeam;
                 const scheme = state.teams[teamId].colorScheme;
-                const accent = schemeAccent(scheme);
                 const chosen = state.teams[teamId].coach;
 
                 if (pool.length === 0) {
@@ -399,11 +405,10 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                     <div
                       key={teamId}
                       className="coach-draft-pool-block coach-draft-pool-block--done"
-                      style={coachDraftPoolBlockStyle(scheme)}
                     >
                       <div className="coach-draft-pool-label">
                         <span className="coach-draft-pool-name-row">
-                          <span>{state.teams[teamId].name}</span>
+                          <span>{teamLabel(teamId)}</span>
                           {isCpuControlledTeam(state, teamId) ? (
                             <CpuDifficultyIcon
                               difficulty={state.cpuDifficultyByTeam[teamId]}
@@ -416,7 +421,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                       <div className="coach-draft-pool-done">
                         {chosen ? (
                           <>
-                            <div className="coach-draft-pool-done-head">
+                            <div className={cn('coach-draft-pool-done-head', coachDoneHeadTierClass(chosen.stars))}>
                               {chosenFlag ? (
                                 <img
                                   src={chosenFlag}
@@ -427,7 +432,7 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                                 />
                               ) : null}
                               <span>
-                                Выбран тренер: <strong>{chosen.name}</strong> ({chosen.stars}★)
+                                Выбран тренер: <strong>{chosen.name}</strong>
                               </span>
                             </div>
                             <CoachDraftCardProfile coach={chosen} variant="pick" />
@@ -444,11 +449,10 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                   <div
                     key={teamId}
                     className={`coach-draft-pool-block${isActivePicker ? ' coach-draft-pool-block--target' : ''}`}
-                    style={coachDraftPoolBlockStyle(scheme)}
                   >
                     <div className="coach-draft-pool-label">
                       <span className="coach-draft-pool-name-row">
-                        <span>{state.teams[teamId].name}</span>
+                        <span>{teamLabel(teamId)}</span>
                         {isCpuControlledTeam(state, teamId) ? (
                           <CpuDifficultyIcon
                             difficulty={state.cpuDifficultyByTeam[teamId]}
@@ -470,16 +474,13 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                               type="button"
                               disabled={!canClick}
                               onClick={() => canClick && props.onSelectFinalCoach(c.id)}
-                              className="coach-draft-cardbtn coach-draft-cardbtn--pick"
-                              style={{ ['--coach-accent' as string]: accent }}
+                              className={cn('coach-draft-cardbtn coach-draft-cardbtn--pick', coachCardStarTierClass(c.stars))}
                             >
                               {flag ? (
                                 <img src={flag} alt="" className="coach-draft-flag" width={38} height={24} />
                               ) : null}
                               <div className="coach-draft-name">{c.name}</div>
-                              <div className="coach-draft-meta">
-                                {c.countryRu} · {c.stars}★
-                              </div>
+                              <div className="coach-draft-meta">{c.countryRu}</div>
                               <CoachDraftCardProfile coach={c} variant="pick" />
                             </button>
                           );
@@ -487,16 +488,16 @@ export function CoachDraftPage(props: CoachDraftPageProps) {
                         return (
                           <div
                             key={c.id}
-                            className="coach-draft-cardbtn coach-draft-cardbtn--readonly coach-draft-cardbtn--pick"
-                            style={{ ['--coach-accent' as string]: accent }}
+                            className={cn(
+                              'coach-draft-cardbtn coach-draft-cardbtn--readonly coach-draft-cardbtn--pick',
+                              coachCardStarTierClass(c.stars),
+                            )}
                           >
                             {flag ? (
                               <img src={flag} alt="" className="coach-draft-flag" width={38} height={24} />
                             ) : null}
                             <div className="coach-draft-name">{c.name}</div>
-                            <div className="coach-draft-meta">
-                              {c.countryRu} · {c.stars}★
-                            </div>
+                            <div className="coach-draft-meta">{c.countryRu}</div>
                             <CoachDraftCardProfile coach={c} variant="pick" />
                           </div>
                         );

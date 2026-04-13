@@ -358,6 +358,9 @@ export function pickCpuFinalCoachId(pool: readonly CoachAssignment[], difficulty
 export const COACH_SIMULATION_PROMPT_EXTRA =
   'Учитывай силу и тактические фишки тренера при симуляции чемпионата.'
 
+/** Дополнительная строка к промпту симуляции (капитаны команд). */
+export const CAPTAIN_SIMULATION_PROMPT_LINE = 'Учти влияние капитана команды.'
+
 /** Схема поля для CPU после драфта тренеров: только в «сложном» — приоритет тренера, иначе случайно. */
 export function pickCpuFormationForCoach(
   coach: CoachAssignment | null,

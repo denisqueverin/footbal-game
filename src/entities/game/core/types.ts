@@ -10,7 +10,14 @@ export type HintsBudget = 0 | 1 | 2 | 3 | 11
 /** Сколько подсказок «Случайный игрок» у каждой команды за всю игру. 0 — подсказки выключены. */
 export type RandomPlayerHintsBudget = 0 | 1 | 2 | 3 | 11
 
-export type GamePhase = 'setup' | 'coachDraft' | 'formationPick' | 'drawReveal' | 'drafting' | 'finished'
+export type GamePhase =
+  | 'setup'
+  | 'coachDraft'
+  | 'formationPick'
+  | 'drawReveal'
+  | 'drafting'
+  | 'captainPick'
+  | 'finished'
 
 export type CoachStars = 2 | 3 | 4 | 5
 
@@ -41,6 +48,11 @@ export type FormationPickPhaseState = {
   activeIndex: number
 }
 
+/** После драфта игроков — по очереди выбор капитана команды. */
+export type CaptainPickPhaseState = {
+  activeIndex: number
+}
+
 /** Формат партии: обычная (несколько людей) или против компьютера (1 игрок). */
 export type GameKind = 'multi' | 'vsCpu'
 
@@ -51,19 +63,41 @@ export type GameMode = 'nationalTop15' | 'nationalTop30' | 'clubs' | 'rpl' | 'ch
 
 export type TeamController = 'human' | 'cpu'
 
+/** В режиме разработки: как задавать имена нейро-команд после загрузки. */
+export type DevNeuroTeamNameMode = 'generate' | 'manual'
+
 /** Тип источника раунда (для режима «Хаос» и подсказок). */
 export type DraftSourceKind = 'national' | 'club' | 'rplClub'
 
-export type ColorSchemeId = 'green' | 'red' | 'blue' | 'white'
+/** Устаревшие `green`…`white` остаются в типе для совместимости сохранений; в UI — только `kit*`. */
+export type ColorSchemeId =
+  | 'green'
+  | 'red'
+  | 'blue'
+  | 'white'
+  | 'kitRedWhite'
+  | 'kitBlueWhite'
+  | 'kitMilan'
+  | 'kitJuventus'
+  | 'kitBarcelona'
+  | 'kitRealMadrid'
+  | 'kitLiverpool'
+  | 'kitBrazil'
+  | 'kitNetherlands'
+  | 'kitPSG'
+  | 'kitArsenalCherry'
+  | 'kitLokomotiv'
+  | 'kitSynthwave'
+  | 'kitAcidTech'
 
 export type SlotPick = {
   slotId: string
   label: string
   playerName: string | null
   country: string | null
-  /** Уровень игрока (звёзды 1–5). Не показываем в UI, но храним в состоянии. */
+  /** Уровень игрока (1–5): для бота с драфта; для человека — при сопоставлении с пулом режима. Окраска карточки, без числа в UI. */
   playerStars: 1 | 2 | 3 | 4 | 5 | null
-  /** Кто поставил игрока. В UI показываем звёзды только для cpu. */
+  /** Кто поставил игрока. */
   pickedBy: 'human' | 'cpu' | null
 }
 
@@ -75,6 +109,8 @@ export type TeamState = {
   /** Выбранный тренер (после драфта тренеров). */
   coach: CoachAssignment | null
   picksBySlotId: Record<string, SlotPick>
+  /** Слот с капитаном (после фазы выбора капитана); null до выбора. */
+  captainSlotId: string | null
 }
 
 /** Сложность CPU по команде (для людей значение не используется). */
@@ -91,9 +127,17 @@ export type GameState = {
   coachDraft: CoachDraftPhaseState | null
   /** Выбор схемы после тренеров; null вне фазы formationPick. */
   formationPick: FormationPickPhaseState | null
+  /** Выбор капитана после драфта; null вне фазы captainPick. */
+  captainPick: CaptainPickPhaseState | null
 
   /** Кто управляет каждой командой: человек или компьютер. */
   teamControllers: Record<TeamId, TeamController>
+
+  /** Включён чекбокс «режим разработки» в настройках при старте партии (кнопка «Редактировать составы»). */
+  devToolsEnabled: boolean
+
+  /** Только при dev: после загрузки — автогенерация имён нейро-команд или ввод вручную. */
+  devNeuroTeamNameMode: DevNeuroTeamNameMode
 
   /** Показывать в подсказке «Лучший состав» скамейку запасных или только стартовых 11. */
   bestLineupIncludeBench: boolean

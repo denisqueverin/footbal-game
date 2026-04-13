@@ -1,10 +1,16 @@
+import {
+  dedupeColorSchemesForActiveOrder,
+  isPickableColorSchemeId,
+} from './colorSchemes'
 import { FORMATIONS, type FormationId } from './formations'
 import { buildChaosDraftPool } from '../modes/chaosDraftPool'
-import { supportsBestLineupHint } from '../modes/gameMode'
+import { isCpuControlledTeam, supportsBestLineupHint } from '../modes/gameMode'
+import { pickCpuCaptainSlotId } from './captainUtils'
 import { TOP_50_EURO_CLUBS } from '../data/topClubs'
 import { RPL_CLUBS } from '../data/rplClubs'
 import type {
   ColorSchemeId,
+  DevNeuroTeamNameMode,
   DraftSourceKind,
   GameMode,
   GameState,
@@ -17,7 +23,7 @@ import type {
   TeamId,
   TeamState,
 } from './types'
-import { areTeamNamesPlaceholder, assignRandomTeamNames } from '../data/teamNames'
+import { seedCpuNeuroBaseNames } from '../data/teamNames'
 import { drawRandom } from './random'
 import {
   existingPickedPlayerNames,
@@ -26,12 +32,14 @@ import {
   pickRandomTop15Player,
   pickRandomTop30Player,
 } from '../hints/randomPlayerHint'
+import { resolvePlayerStarsForDraftedName } from '../hints/resolvePlayerStars'
 import {
   TOP_15_FOOTBALL_COUNTRIES_RU,
   TOP_30_FOOTBALL_COUNTRIES_RU,
   pickRandomUnique,
 } from '../data/topCountries'
 import { roundTurnOrder } from './turnOrder'
+import { canAdvanceFromDrawRevealIdentity } from './drawRevealIdentity'
 import { withBestLineupBenchRule } from './bestLineupBenchRule'
 import {
   buildInitialCoachDraftState,
@@ -40,15 +48,18 @@ import {
 } from './coachDraftPhase'
 
 export type GameAction =
-  | { type: 'setup/start' }
+  | { type: 'setup/start'; devToolsEnabled?: boolean }
   | { type: 'coachDraft/toggleEliminate'; coachId: string }
   | { type: 'coachDraft/confirmEliminate' }
   /** Одним шагом снять тренера с колонки жертвы (клик по карточке). */
   | { type: 'coachDraft/eliminateCoach'; coachId: string }
   | { type: 'coachDraft/selectFinalCoach'; coachId: string }
   | { type: 'formationPick/selectFormation'; formation: FormationId }
-  | { type: 'drawReveal/assignTeamNames' }
   | { type: 'drawReveal/continue' }
+  | { type: 'drawReveal/setTeamName'; team: TeamId; name: string }
+  | { type: 'drawReveal/setTeamColorScheme'; team: TeamId; scheme: ColorSchemeId }
+  | { type: 'drawReveal/seedCpuTeamNames' }
+  | { type: 'setup/setDevNeuroTeamNameMode'; mode: DevNeuroTeamNameMode }
   | { type: 'setup/setMode'; mode: GameMode }
   | { type: 'setup/setCpuDifficultyForTeam'; team: TeamId; difficulty: CpuDifficulty }
   | { type: 'setup/setTeamCount'; count: TeamCount }
@@ -71,6 +82,7 @@ export type GameAction =
   | { type: 'draft/useBestLineupHint'; team: TeamId }
   | { type: 'draft/useRandomPlayerHint'; team: TeamId; slotId: string }
   | { type: 'draft/clearRandomPlayerHintError' }
+  | { type: 'captainPick/selectCaptain'; team: TeamId; slotId: string }
   | { type: 'game/reset' }
 
 const ALL_TEAMS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
@@ -172,6 +184,7 @@ function makeEmptyTeam(
     colorScheme,
     coach: null,
     picksBySlotId,
+    captainSlotId: null,
   }
 }
 
@@ -187,6 +200,43 @@ function isTeamFull(team: TeamState): boolean {
 
 function allActiveTeamsFull(state: GameState): boolean {
   return state.teamOrder.every((id) => isTeamFull(state.teams[id]))
+}
+
+/** После выбора капитана: автокапитаны для CPU подряд, затем либо следующий человек, либо финиш. */
+function advanceCaptainPickAfterSelection(state: GameState, startIndex: number): GameState {
+  const order = state.teamOrder
+  let s: GameState = { ...state, captainPick: { activeIndex: startIndex } }
+  let i = startIndex
+  while (i < order.length && isCpuControlledTeam(s, order[i]!)) {
+    const tid = order[i]!
+    const slot = pickCpuCaptainSlotId(s.teams[tid])
+    if (!slot) {
+      return { ...s, phase: 'finished', captainPick: null, draftTurnSliceStartedAt: null }
+    }
+    s = {
+      ...s,
+      teams: {
+        ...s.teams,
+        [tid]: { ...s.teams[tid], captainSlotId: slot },
+      },
+      captainPick: { activeIndex: i + 1 },
+    }
+    i += 1
+  }
+  if (i >= order.length) {
+    return { ...s, phase: 'finished', captainPick: null, draftTurnSliceStartedAt: null }
+  }
+  return { ...s, captainPick: { activeIndex: i } }
+}
+
+function beginCaptainPickPhase(state: GameState): GameState {
+  const base: GameState = {
+    ...state,
+    phase: 'captainPick',
+    captainPick: { activeIndex: 0 },
+    draftTurnSliceStartedAt: null,
+  }
+  return advanceCaptainPickAfterSelection(base, 0)
 }
 
 function drawNextCountry(state: GameState): GameState {
@@ -231,12 +281,13 @@ function beginDraftingPhase(state: GameState): GameState {
   const base: GameState = { ...state, phase: 'drafting' }
   const drawn = drawNextCountry(base)
   if (!drawn.currentCountry) {
-    return { ...drawn, phase: 'finished' }
+    return { ...drawn, phase: 'finished', captainPick: null }
   }
   const first = roundTurnOrder(drawn.teamOrder, drawn.draftTurnOrderBase, drawn.roundIndex)[0]
   const startedAt = drawn.draftTimerStartedAt ?? Date.now()
   return {
     ...drawn,
+    captainPick: null,
     turn: first ?? drawn.turn,
     draftTimerStartedAt: startedAt,
     draftTimerPausedAt: null,
@@ -261,17 +312,20 @@ export function createInitialGameState(): GameState {
     mode: 'nationalTop15',
     coachDraft: null,
     formationPick: null,
+    captainPick: null,
     teamControllers: defaultTeamControllers(),
     draftTurnOrderBase: 0,
+    devToolsEnabled: false,
+    devNeuroTeamNameMode: 'generate',
 
     bestLineupIncludeBench: true,
 
-    hintsBudgetPerPlayer: 1,
-    hintsRemaining: createHintsRemaining(1),
+    hintsBudgetPerPlayer: 3,
+    hintsRemaining: createHintsRemaining(3),
     hintUsedThisRound: createHintUsedThisRound(),
 
-    randomPlayerHintsBudgetPerPlayer: 1,
-    randomPlayerHintsRemaining: createRandomPlayerHintsRemaining(1),
+    randomPlayerHintsBudgetPerPlayer: 3,
+    randomPlayerHintsRemaining: createRandomPlayerHintsRemaining(3),
     randomPlayerHintError: null,
 
     countriesAll: [],
@@ -285,10 +339,10 @@ export function createInitialGameState(): GameState {
 
     turn: 'team1',
     teams: {
-      team1: makeEmptyTeam('team1', '1-4-3-3', 'Команда 1', 'green'),
-      team2: makeEmptyTeam('team2', '1-4-3-3', 'Команда 2', 'red'),
-      team3: makeEmptyTeam('team3', '1-4-3-3', 'Команда 3', 'blue'),
-      team4: makeEmptyTeam('team4', '1-4-3-3', 'Команда 4', 'white'),
+      team1: makeEmptyTeam('team1', '1-4-3-3', 'Команда 1', 'kitBarcelona'),
+      team2: makeEmptyTeam('team2', '1-4-3-3', 'Команда 2', 'kitMilan'),
+      team3: makeEmptyTeam('team3', '1-4-3-3', 'Команда 3', 'kitJuventus'),
+      team4: makeEmptyTeam('team4', '1-4-3-3', 'Команда 4', 'kitLiverpool'),
     },
 
     draftTimerStartedAt: null,
@@ -325,12 +379,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const count = action.count
       if (count === 1) {
         const order: TeamId[] = ['team1', 'team2']
+        const teams = dedupeColorSchemesForActiveOrder(state.teams, order)
         return withBestLineupBenchRule({
           ...state,
           gameKind: 'vsCpu',
           teamOrder: order,
           turn: order[0] ?? 'team1',
           teamControllers: { ...state.teamControllers, team1: 'human', team2: 'cpu' },
+          teams,
         })
       }
       const nextOrder = teamOrderForCount(count)
@@ -338,12 +394,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.gameKind === 'vsCpu') {
         teamControllers = { ...state.teamControllers, team1: 'human', team2: 'human' }
       }
+      const teams = dedupeColorSchemesForActiveOrder(state.teams, nextOrder)
       return withBestLineupBenchRule({
         ...state,
         gameKind: 'multi',
         teamOrder: nextOrder,
         turn: nextOrder[0] ?? 'team1',
         teamControllers,
+        teams,
       })
     }
     case 'setup/setTeamController': {
@@ -375,6 +433,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'setup/setTeamColorScheme': {
       if (state.phase !== 'setup') return state
+      if (!isPickableColorSchemeId(action.scheme)) return state
+      const taken = state.teamOrder.some(
+        (tid) => tid !== action.team && state.teams[tid].colorScheme === action.scheme,
+      )
+      if (taken) return state
       return {
         ...state,
         teams: {
@@ -399,10 +462,41 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         randomPlayerHintsBudgetPerPlayer: 11,
       })
     }
-    case 'drawReveal/assignTeamNames': {
+    case 'setup/setDevNeuroTeamNameMode': {
+      if (state.phase !== 'setup') return state
+      return { ...state, devNeuroTeamNameMode: action.mode }
+    }
+    case 'drawReveal/setTeamName': {
       if (state.phase !== 'drawReveal') return state
-      if (!areTeamNamesPlaceholder(state)) return state
-      return assignRandomTeamNames(state)
+      if (!state.teamOrder.includes(action.team)) return state
+      const clipped = action.name.length > 48 ? action.name.slice(0, 48) : action.name
+      return {
+        ...state,
+        teams: {
+          ...state.teams,
+          [action.team]: { ...state.teams[action.team], name: clipped },
+        },
+      }
+    }
+    case 'drawReveal/setTeamColorScheme': {
+      if (state.phase !== 'drawReveal') return state
+      if (!state.teamOrder.includes(action.team)) return state
+      if (!isPickableColorSchemeId(action.scheme)) return state
+      const taken = state.teamOrder.some(
+        (tid) => tid !== action.team && state.teams[tid].colorScheme === action.scheme,
+      )
+      if (taken) return state
+      return {
+        ...state,
+        teams: {
+          ...state.teams,
+          [action.team]: { ...state.teams[action.team], colorScheme: action.scheme },
+        },
+      }
+    }
+    case 'drawReveal/seedCpuTeamNames': {
+      if (state.phase !== 'drawReveal') return state
+      return seedCpuNeuroBaseNames(state)
     }
     case 'setup/start': {
       const setupState = withBestLineupBenchRule(state)
@@ -477,6 +571,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         phase: 'drawReveal',
         coachDraft: null,
         formationPick: null,
+        captainPick: null,
+        devToolsEnabled: action.devToolsEnabled ?? false,
       }
     }
     case 'formationPick/selectFormation': {
@@ -621,6 +717,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           phase: 'formationPick',
           coachDraft: null,
           formationPick: { activeIndex: 0 },
+          captainPick: null,
           teams: nextTeams,
           turn: order[0] ?? 'team1',
         }
@@ -639,12 +736,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     }
     case 'drawReveal/continue': {
       if (state.phase !== 'drawReveal') return state
+      if (!canAdvanceFromDrawRevealIdentity(state)) return state
       const order = state.teamOrder
       const allHaveCoaches = order.every((id) => state.teams[id].coach != null)
       if (!allHaveCoaches) {
         return {
           ...state,
           phase: 'coachDraft',
+          formationPick: null,
+          captainPick: null,
           coachDraft: buildInitialCoachDraftState(order, state.mode, {
             gameKind: state.gameKind,
             cpuDifficultyByTeam: state.cpuDifficultyByTeam,
@@ -708,12 +808,23 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       const trimmed = action.playerName.trim()
+      const sourceForResolve = (existing.country ?? state.currentCountry ?? '').trim()
+      const resolvedStars =
+        trimmed.length === 0
+          ? null
+          : resolvePlayerStarsForDraftedName({
+              mode: state.mode,
+              draftSourceKind: state.currentDraftSourceKind,
+              sourceLabel: sourceForResolve,
+              slotLabel: existing.label,
+              playerName: trimmed,
+            })
       // Не сбрасываем country при пустом имени: при наборе текста имя временно пустое,
       // иначе клуб/страна драфта теряются до следующего сохранения.
       const nextPick: SlotPick =
         trimmed.length === 0
-          ? { ...existing, playerName: null, country: existing.country }
-          : { ...existing, playerName: trimmed, country: existing.country }
+          ? { ...existing, playerName: null, country: existing.country, playerStars: null }
+          : { ...existing, playerName: trimmed, country: existing.country, playerStars: resolvedStars }
 
       const nextTeam: TeamState = {
         ...team,
@@ -731,12 +842,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (allActiveTeamsFull(nextState)) {
         const now = Date.now()
         const clocked = commitCurrentTurnSlice(state, now)
-        return {
+        return beginCaptainPickPhase({
           ...clocked,
           teams: nextState.teams,
-          phase: 'finished',
-          draftTurnSliceStartedAt: null,
-        }
+        })
       }
 
       return nextState
@@ -840,7 +949,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished', draftTurnSliceStartedAt: null }
+        return beginCaptainPickPhase({ ...nextState, draftTurnSliceStartedAt: null })
       }
 
       const orderThisRound = roundTurnOrder(
@@ -857,7 +966,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
-        return { ...advanced, phase: 'finished', draftTurnSliceStartedAt: null }
+        return beginCaptainPickPhase({ ...advanced, draftTurnSliceStartedAt: null })
       }
       const firstNextRound = roundTurnOrder(
         advanced.teamOrder,
@@ -888,7 +997,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             ...existing,
             playerName,
             country: state.currentCountry,
-            playerStars: action.playerStars ?? null,
+            playerStars:
+              action.pickedBy === 'cpu'
+                ? action.playerStars ?? null
+                : resolvePlayerStarsForDraftedName({
+                    mode: state.mode,
+                    draftSourceKind: state.currentDraftSourceKind,
+                    sourceLabel: state.currentCountry,
+                    slotLabel: existing.label,
+                    playerName,
+                  }),
             pickedBy: action.pickedBy ?? 'human',
           },
         },
@@ -903,7 +1021,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       if (allActiveTeamsFull(nextState)) {
-        return { ...nextState, phase: 'finished', draftTurnSliceStartedAt: null }
+        return beginCaptainPickPhase({ ...nextState, draftTurnSliceStartedAt: null })
       }
 
       const orderThisRound = roundTurnOrder(
@@ -920,7 +1038,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       // last team confirmed: advance to next item and back to first team of the new round
       const advanced = drawNextCountry({ ...nextState, turn: first })
       if (!advanced.currentCountry) {
-        return { ...advanced, phase: 'finished', draftTurnSliceStartedAt: null }
+        return beginCaptainPickPhase({ ...advanced, draftTurnSliceStartedAt: null })
       }
       const firstNextRound = roundTurnOrder(
         advanced.teamOrder,
@@ -928,6 +1046,30 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         advanced.roundIndex,
       )[0]
       return openCurrentTurnSlice({ ...advanced, turn: firstNextRound ?? advanced.turn }, now)
+    }
+    case 'captainPick/selectCaptain': {
+      if (state.phase !== 'captainPick' || !state.captainPick) return state
+      const order = state.teamOrder
+      const idx = state.captainPick.activeIndex
+      if (idx < 0 || idx >= order.length) return state
+      const tid = order[idx]!
+      if (tid !== action.team) return state
+      if (isCpuControlledTeam(state, tid)) return state
+      const team = state.teams[tid]
+      const pick = team.picksBySlotId[action.slotId]
+      if (!pick?.playerName) return state
+      if (!slotPickForFormationSlot(team, action.slotId)) return state
+
+      const nextTeams: GameState['teams'] = {
+        ...state.teams,
+        [tid]: { ...team, captainSlotId: action.slotId },
+      }
+      const afterAssign: GameState = {
+        ...state,
+        teams: nextTeams,
+        captainPick: { activeIndex: idx + 1 },
+      }
+      return advanceCaptainPickAfterSelection(afterAssign, idx + 1)
     }
     default:
       return state
