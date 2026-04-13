@@ -1,5 +1,30 @@
 import type { CpuDifficulty, DraftSourceKind, GameKind, GameMode, TeamController, TeamId } from '../core/types'
 
+const NEURO_DISPLAY_PREFIX = 'Нейро '
+
+/** Убрать префикс «Нейро » из сохранённого имени (старые сохранения). */
+export function stripNeuroNamePrefix(storedName: string): string {
+  if (storedName.startsWith(NEURO_DISPLAY_PREFIX)) {
+    return storedName.slice(NEURO_DISPLAY_PREFIX.length).trimStart()
+  }
+  return storedName
+}
+
+/** Имя команды для UI: у нейро-команд добавляется «Нейро »; в состоянии хранится без префикса. */
+export function formatTeamDisplayName(
+  ctx: {
+    gameKind: GameKind
+    teamOrder: readonly TeamId[]
+    teamControllers: Record<TeamId, TeamController>
+  },
+  teamId: TeamId,
+  storedName: string,
+): string {
+  const base = stripNeuroNamePrefix(storedName)
+  if (!isCpuControlledTeam(ctx, teamId)) return base
+  return `${NEURO_DISPLAY_PREFIX}${base}`
+}
+
 /** Управляется ли команда компьютером в текущем режиме. */
 export function isCpuControlledTeam(
   ctx: {

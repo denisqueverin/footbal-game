@@ -1,13 +1,25 @@
 import { useCallback, useState } from 'react';
 
 import { FORMATIONS, type FormationId } from '@/entities/game/core/formations';
-import type { CoachAssignment, ColorSchemeId, CpuDifficulty, GameState, TeamId } from '@/entities/game/core/types';
-import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
-import { COACH_SIMULATION_PROMPT_EXTRA } from '@/entities/game/data/coaches';
+import type {
+  CoachAssignment,
+  ColorSchemeId,
+  CpuDifficulty,
+  GameState,
+  SlotPick,
+  TeamId,
+} from '@/entities/game/core/types';
+import { formatTeamDisplayName, isCpuControlledTeam } from '@/entities/game/modes/gameMode';
+import {
+  CAPTAIN_SIMULATION_PROMPT_LINE,
+  COACH_SIMULATION_PROMPT_EXTRA,
+} from '@/entities/game/data/coaches';
 
+import { CaptainArmbandIcon } from '@/shared/ui/captain-armband-icon/CaptainArmbandIcon';
 import { ConfirmNewGameModal } from '@/shared/ui/confirm-new-game-modal';
 import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
-import { schemeAccent, schemeDotColor } from '@/shared/lib/schemeAccent';
+import { schemeAccent, schemeLabelRu } from '@/shared/lib/schemeAccent';
+import { KitSchemeIcon } from '@/shared/ui/kit-scheme-icon/KitSchemeIcon';
 
 import { SETUP_MODE_OPTIONS, SETUP_SCHEME_OPTIONS } from '@/pages/setup-page/setup-page.constants';
 import { formationLabelShort } from '@/pages/setup-page/setup-page.utils';
@@ -26,7 +38,7 @@ const SIMULATION_PROMPT = `Сделай глубокую симуляцию че
 Почему выиграла команда, а почему другая проиграла?`;
 
 function schemeLabel(colorScheme: ColorSchemeId): string {
-  return SETUP_SCHEME_OPTIONS.find((o) => o.id === colorScheme)?.label ?? colorScheme;
+  return SETUP_SCHEME_OPTIONS.find((o) => o.id === colorScheme)?.label ?? schemeLabelRu(colorScheme);
 }
 
 function buildResultExportText(state: GameState): string {
@@ -41,27 +53,52 @@ function buildResultExportText(state: GameState): string {
     '',
   ];
 
+  const nameCtx = {
+    gameKind: state.gameKind,
+    teamOrder: state.teamOrder,
+    teamControllers: state.teamControllers,
+  };
+
   for (const teamId of state.teamOrder) {
     const team = state.teams[teamId];
     const formationShort = formationLabelShort(team.formation);
-    lines.push(`— ${team.name} —`);
+    lines.push(`— ${formatTeamDisplayName(nameCtx, teamId, team.name)} —`);
     if (team.coach) {
-      lines.push(`Тренер: ${team.coach.name} (${team.coach.countryRu}, ${team.coach.stars}★)`);
+      lines.push(`Тренер: ${team.coach.name} (${team.coach.countryRu})`);
     }
     lines.push(`Схема: ${formationShort}`);
+    const capSlot = team.captainSlotId;
+    const capPick = capSlot ? team.picksBySlotId[capSlot] : null;
+    const capLabel =
+      capSlot != null
+        ? (() => {
+            for (const row of FORMATIONS[team.formation].rows) {
+              for (const cell of row) {
+                if (cell.slotId === capSlot) return cell.label;
+              }
+            }
+            return capSlot;
+          })()
+        : null;
+    if (capPick?.playerName) {
+      lines.push(`Капитан: ${capPick.playerName} (${capLabel ?? capSlot})`);
+    }
     const rows = FORMATIONS[team.formation].rows;
     for (const row of rows) {
       for (const cell of row) {
         const pick = team.picksBySlotId[cell.slotId];
         const name = pick?.playerName ?? '—';
         const country = pick?.country ? ` (${pick.country})` : '';
-        lines.push(`  ${cell.label}: ${name}${country}`);
+        const capMark = cell.slotId === capSlot ? ' [капитан]' : '';
+        lines.push(`  ${cell.label}: ${name}${country}${capMark}`);
       }
     }
     lines.push('');
   }
 
   lines.push(SIMULATION_PROMPT);
+  lines.push('');
+  lines.push(CAPTAIN_SIMULATION_PROMPT_LINE);
   lines.push('');
   lines.push(COACH_SIMULATION_PROMPT_EXTRA);
   return lines.join('\n');
@@ -71,7 +108,8 @@ interface TeamSummaryProps {
   title: string;
   colorScheme: ColorSchemeId;
   formationId: FormationId;
-  picks: Record<string, { playerName: string | null; country: string | null; label: string }>;
+  picks: Record<string, SlotPick>;
+  captainSlotId: string | null;
   turnTimeMs: number;
   coach: CoachAssignment | null;
   cpuDifficulty?: CpuDifficulty | null;
@@ -80,7 +118,6 @@ interface TeamSummaryProps {
 function TeamSummary(props: TeamSummaryProps) {
   const rows = FORMATIONS[props.formationId].rows;
   const accent = schemeAccent(props.colorScheme);
-  const dot = schemeDotColor(props.colorScheme);
 
   return (
     <div
@@ -109,16 +146,15 @@ function TeamSummary(props: TeamSummaryProps) {
               />
             ) : null}
             <span>
-              Тренер: <strong>{props.coach.name}</strong> ({props.coach.countryRu}, {props.coach.stars}★)
+              Тренер: <strong>{props.coach.name}</strong> ({props.coach.countryRu})
             </span>
           </div>
         </>
       ) : null}
-      <div className="result-color-row" aria-label={`Цвет команды: ${schemeLabel(props.colorScheme)}`}>
-        <span
-          className="result-color-dot"
-          style={{ background: dot, boxShadow: `0 0 0 1px ${accent}` }}
-        />
+      <div className="result-color-row" aria-label={`Форма команды: ${schemeLabel(props.colorScheme)}`}>
+        <span className="result-kit-wrap" style={{ boxShadow: `0 0 0 1px ${accent}`, borderRadius: 8 }}>
+          <KitSchemeIcon schemeId={props.colorScheme} className="result-kit-icon" />
+        </span>
       </div>
       <div className="result-list">
         {rows.flatMap((row) =>
@@ -127,12 +163,21 @@ function TeamSummary(props: TeamSummaryProps) {
             const name = pick?.playerName ?? '—';
             const country = pick?.country ? ` (${pick.country})` : '';
 
+            const isCaptain = cell.slotId === props.captainSlotId;
+
             return (
               <div key={cell.slotId} className="result-item">
                 <span className="result-badge" style={{ borderColor: accent }}>
                   {cell.label}
                 </span>
                 <span className="result-item-text">
+                  {isCaptain ? (
+                    <CaptainArmbandIcon
+                      className="result-captain-armband"
+                      size={20}
+                      title="Капитан команды"
+                    />
+                  ) : null}
                   {name}
                   <span className="result-muted">{country}</span>
                 </span>
@@ -169,7 +214,7 @@ export function ResultPage(props: ResultPageProps) {
         onConfirm={props.onReset}
       />
       <div className="result-card">
-        <div className="setup-kicker" style={{ marginBottom: 12 }}>
+        <div className="setup-kicker result-kicker">
           <span className="setup-kicker-icon" aria-hidden="true">
             🏆
           </span>
@@ -177,7 +222,7 @@ export function ResultPage(props: ResultPageProps) {
         </div>
         <h1 className="result-title">Игра завершена</h1>
         <p className="result-sub">
-          Итоги по командам и выбранным схемам. Ниже — суммарное время на ходах и тренеры команд.
+          Составы, капитаны, время на ходах — скопируйте блок ниже для симуляции в чате.
         </p>
 
         <div
@@ -188,14 +233,24 @@ export function ResultPage(props: ResultPageProps) {
         >
           {state.teamOrder.map((teamId: TeamId) => {
             const team = state.teams[teamId];
+            const title = formatTeamDisplayName(
+              {
+                gameKind: state.gameKind,
+                teamOrder: state.teamOrder,
+                teamControllers: state.teamControllers,
+              },
+              teamId,
+              team.name,
+            );
 
             return (
               <TeamSummary
                 key={teamId}
-                title={team.name}
+                title={title}
                 colorScheme={team.colorScheme}
                 formationId={team.formation}
                 picks={team.picksBySlotId}
+                captainSlotId={team.captainSlotId ?? null}
                 turnTimeMs={state.draftTurnAccumMs[teamId] ?? 0}
                 coach={state.teams[teamId].coach}
                 cpuDifficulty={
@@ -212,6 +267,7 @@ export function ResultPage(props: ResultPageProps) {
           <kbd className="result-kbd">Ctrl</kbd>
           {' + '}
           <kbd className="result-kbd">V</kbd> на ПК или «Вставить» на телефоне) и отправьте сообщение.{' '}
+          <strong>Капитаны:</strong> {CAPTAIN_SIMULATION_PROMPT_LINE}{' '}
           <strong>Тренеры:</strong> {COACH_SIMULATION_PROMPT_EXTRA}
         </p>
 

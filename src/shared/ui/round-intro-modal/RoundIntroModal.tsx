@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import type { CSSProperties, MouseEvent } from 'react';
 
 import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import { isChaosMode, isClubsMode, isNationalDraftSource } from '@/entities/game/modes/gameMode';
@@ -13,6 +13,8 @@ export interface RoundIntroModalProps {
   draftSourceKind?: DraftSourceKind | null;
   open: boolean;
   exiting: boolean;
+  /** Длительность до авто-закрытия (мс), совпадает с таймером в GamePage. */
+  autoCloseMs: number;
   onClose: () => void;
 }
 
@@ -37,6 +39,8 @@ export function RoundIntroModal(props: RoundIntroModalProps) {
     ? getCountryFlagUrlRu(props.sourceLabel)
     : getClubFlagUrl(props.sourceLabel);
 
+  const ringR = 17;
+
   return (
     <div
       className={`round-modal-backdrop ${props.exiting ? 'round-modal-backdrop--out' : ''}`}
@@ -48,14 +52,27 @@ export function RoundIntroModal(props: RoundIntroModalProps) {
         className={`round-modal-panel ${props.exiting ? 'round-modal-panel--out' : ''}`}
         onClick={stopPanelPointerPropagation}
       >
-        <button
-          type="button"
-          className="round-modal-close"
-          aria-label="Закрыть"
-          onClick={props.onClose}
+        <div
+          className={`round-modal-close-wrap${props.exiting ? ' round-modal-close-wrap--exiting' : ''}`}
+          style={
+            {
+              ['--round-modal-autoclose-ms' as string]: `${props.autoCloseMs}ms`,
+            } as CSSProperties
+          }
         >
-          ×
-        </button>
+          <svg
+            className="round-modal-close-ring"
+            viewBox="0 0 40 40"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle className="round-modal-close-ring-track" cx="20" cy="20" r={ringR} />
+            <circle className="round-modal-close-ring-progress" cx="20" cy="20" r={ringR} pathLength={1} />
+          </svg>
+          <button type="button" className="round-modal-close" aria-label="Закрыть" onClick={props.onClose}>
+            ×
+          </button>
+        </div>
         <div className="round-modal-body">
           <div id="round-modal-title" className="round-modal-title">
             Раунд {props.round}

@@ -2,9 +2,15 @@ import { inferChaosSourceKind } from '@/entities/game/modes/chaosDraftPool';
 import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import { formationRowsForDisplay } from '@/entities/game/core/formations';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
-import { isChaosMode, isClubsMode, isNationalDraftSource, isNationalMode } from '@/entities/game/modes/gameMode';
+import {
+  formatTeamDisplayName,
+  isChaosMode,
+  isClubsMode,
+  isCpuControlledTeam,
+  isNationalDraftSource,
+  isNationalMode,
+} from '@/entities/game/modes/gameMode';
 import type { GameState, TeamId } from '@/entities/game/core/types';
-import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
 import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
 
 export interface LineupEditorProps {
@@ -26,7 +32,17 @@ export function LineupEditor(props: LineupEditorProps) {
           return (
             <section key={teamId} className="lineup-team-section">
               <h3 className="lineup-team-heading fc-heading">
-                <span className="lineup-team-heading-text">{team.name}</span>
+                <span className="lineup-team-heading-text">
+                  {formatTeamDisplayName(
+                    {
+                      gameKind: state.gameKind,
+                      teamOrder: state.teamOrder,
+                      teamControllers: state.teamControllers,
+                    },
+                    teamId,
+                    team.name,
+                  )}
+                </span>
                 {isCpuControlledTeam(state, teamId) ? (
                   <CpuDifficultyIcon
                     difficulty={state.cpuDifficultyByTeam[teamId]}

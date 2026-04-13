@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { FORMATIONS, formationIdFromCoachPriorityLabel, type FormationId } from '@/entities/game/core/formations';
 import type { GameState } from '@/entities/game/core/types';
+import { formatTeamDisplayName } from '@/entities/game/modes/gameMode';
 import { pickCpuFormationForCoach } from '@/entities/game/data/coaches';
 import { formationLabelShort } from '@/pages/setup-page/setup-page.utils';
 import { APP_VERSION } from '@/shared/config/version';
@@ -37,10 +38,17 @@ export function FormationPickPage(props: FormationPickPageProps) {
     (state.teamControllers[activeTeam] === 'cpu' || (state.gameKind === 'vsCpu' && activeTeam === 'team2'));
 
   const displayName =
-    activeTeam &&
-    (state.teamControllers[activeTeam] === 'cpu' || (state.gameKind === 'vsCpu' && activeTeam === 'team2'))
-      ? `Нейро ${team!.name}`
-      : team?.name ?? '';
+    activeTeam && team
+      ? formatTeamDisplayName(
+          {
+            gameKind: state.gameKind,
+            teamOrder: state.teamOrder,
+            teamControllers: state.teamControllers,
+          },
+          activeTeam,
+          team.name,
+        )
+      : '';
 
   const handleCpu = useCallback(() => {
     if (!fp || !activeTeam || !isCpuTurn || !team) return;
@@ -95,25 +103,30 @@ export function FormationPickPage(props: FormationPickPageProps) {
       />
       <div className="formation-pick-shell">
         <div className="formation-pick-version">v{APP_VERSION}</div>
-        <h1 className="formation-pick-title">Выбор схемы поля</h1>
-        <p className="formation-pick-sub">
-          <span className="formation-pick-actor">
-            {displayName}
-            {isCpuTurn ? (
-              <CpuDifficultyIcon difficulty={state.cpuDifficultyByTeam[activeTeam]} />
+        <div className="formation-pick-lead">
+          <h1 className="formation-pick-title">Выбор схемы поля</h1>
+          <p className="formation-pick-sub">
+            <span className="formation-pick-actor">
+              {displayName}
+              {isCpuTurn ? (
+                <CpuDifficultyIcon difficulty={state.cpuDifficultyByTeam[activeTeam]} />
+              ) : null}
+            </span>
+            : выберите расстановку. У тренера <strong>{coach?.name ?? '—'}</strong> приоритетная схема в
+            карьере — <strong>{coach?.priorityFormation ?? '—'}</strong>
+            {priorityFormation
+              ? ' (совпадает с одной из сеток ниже — отмечена короной).'
+              : ' (нет точного совпадения с доступными сетками).'}
+          </p>
+          <div className="formation-pick-cpu-slot" aria-live="polite">
+            {isCpuTurn && cpuThinking ? (
+              <div className="formation-pick-cpu-thinking">
+                <span className="formation-pick-cpu-spinner" aria-hidden="true" />
+                Компьютер выбирает схему…
+              </div>
             ) : null}
-          </span>
-          : выберите расстановку. У тренера <strong>{coach?.name ?? '—'}</strong> приоритетная схема в
-          карьере — <strong>{coach?.priorityFormation ?? '—'}</strong>
-          {priorityFormation ? ' (совпадает с одной из сеток ниже — отмечена короной).' : ' (нет точного совпадения с доступными сетками).'}
-        </p>
-
-        {isCpuTurn && cpuThinking ? (
-          <div className="formation-pick-cpu-thinking" aria-live="polite">
-            <span className="formation-pick-cpu-spinner" aria-hidden="true" />
-            Компьютер выбирает схему…
           </div>
-        ) : null}
+        </div>
 
         <div className="formation-pick-grid">
           {(Object.keys(FORMATIONS) as FormationId[]).map((formationId) => {

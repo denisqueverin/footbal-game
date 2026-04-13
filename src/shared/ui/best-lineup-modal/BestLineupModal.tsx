@@ -1,11 +1,22 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getLineupSectionForClub } from '@/entities/game/lineups/clubBestLineups';
+import type { BestLineupLine } from '@/entities/game/lineups/bestLineupTypes';
 import { isChaosMode, isClubsMode, isNationalMode } from '@/entities/game/modes/gameMode';
 import { getNationalLineupForCountry } from '@/entities/game/lineups/nationalBestLineups';
 import { getClubFlagUrl } from '@/entities/game/data/clubCountries';
 import type { DraftSourceKind, GameMode } from '@/entities/game/core/types';
 import { getCountryFlagUrlRu } from '@/entities/game/data/topCountries';
+
+function lineupDisplayName(line: BestLineupLine): string {
+  if (!line.ru.trim() && !line.en.trim()) return '';
+  return line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
+}
+
+/** Текст для ввода в драфт: русское имя и фамилия, иначе латиница из данных. */
+function lineupCopyText(line: BestLineupLine): string {
+  return line.ru.trim() || line.en.trim();
+}
 
 export interface BestLineupModalProps {
   open: boolean;
@@ -21,7 +32,42 @@ export interface BestLineupModalProps {
 
 const RUSSIA_RU = 'Россия';
 
+const COPY_OK_MS = 1600;
+
 export function BestLineupModal(props: BestLineupModalProps) {
+  const [copiedRowKey, setCopiedRowKey] = useState<string | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  const handleCopyPlayerName = useCallback(async (rowKey: string, text: string) => {
+    if (!text) return;
+    if (copyTimerRef.current != null) {
+      window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        return;
+      }
+    }
+    setCopiedRowKey(rowKey);
+    copyTimerRef.current = window.setTimeout(() => {
+      copyTimerRef.current = null;
+      setCopiedRowKey(null);
+    }, COPY_OK_MS);
+  }, []);
+
   const clubSection = useMemo(() => {
     if (isChaosMode(props.mode)) {
       const k = props.currentDraftSourceKind ?? null;
@@ -38,6 +84,26 @@ export function BestLineupModal(props: BestLineupModalProps) {
     }
     return isNationalMode(props.mode) ? getNationalLineupForCountry(props.currentSource) : null;
   }, [props.mode, props.currentSource, props.currentDraftSourceKind]);
+
+  useEffect(() => {
+    if (!props.open) {
+      setCopiedRowKey(null);
+      if (copyTimerRef.current != null) {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    }
+  }, [props.open]);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current != null) {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!props.open) {
@@ -103,6 +169,28 @@ export function BestLineupModal(props: BestLineupModalProps) {
 
   const russiaFlagUrl = getCountryFlagUrlRu(RUSSIA_RU);
 
+  const renderLineupLine = (line: BestLineupLine, rowKey: string) => {
+    if (!line.ru.trim() && !line.en.trim()) {
+      return null;
+    }
+    const display = lineupDisplayName(line);
+    const text = lineupCopyText(line);
+    return (
+      <li key={rowKey} className="best-lineup-li">
+        <span className="best-lineup-role">{line.role}</span>
+        <span className="best-lineup-name">{display}</span>
+        <button
+          type="button"
+          className="best-lineup-copy-btn"
+          onClick={() => void handleCopyPlayerName(rowKey, text)}
+          aria-label={`Скопировать имя и фамилию: ${text}`}
+        >
+          {copiedRowKey === rowKey ? 'Скопировано' : 'Копировать'}
+        </button>
+      </li>
+    );
+  };
+
   return (
     <div className="round-modal-backdrop" role="presentation" onClick={props.onClose}>
       <div
@@ -152,49 +240,22 @@ export function BestLineupModal(props: BestLineupModalProps) {
                 <>
                   <h4 className="best-lineup-group-title">Старт</h4>
                   <ul className="best-lineup-list">
-                    {clubSection.start.map((line, index) => {
-                      if (!line.ru.trim() && !line.en.trim()) {
-                        return null;
-                      }
-                      const name = line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
-                      return (
-                        <li key={`${clubSection.club}-s-${index}`} className="best-lineup-li">
-                          <span className="best-lineup-role">{line.role}</span>
-                          <span className="best-lineup-name">{name}</span>
-                        </li>
-                      );
-                    })}
+                    {clubSection.start.map((line, index) =>
+                      renderLineupLine(line, `${clubSection.club}-s-${index}`),
+                    )}
                   </ul>
                   <h4 className="best-lineup-group-title">Запас</h4>
                   <ul className="best-lineup-list">
-                    {clubSection.bench.map((line, index) => {
-                      if (!line.ru.trim() && !line.en.trim()) {
-                        return null;
-                      }
-                      const name = line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
-                      return (
-                        <li key={`${clubSection.club}-b-${index}`} className="best-lineup-li">
-                          <span className="best-lineup-role">{line.role}</span>
-                          <span className="best-lineup-name">{name}</span>
-                        </li>
-                      );
-                    })}
+                    {clubSection.bench.map((line, index) =>
+                      renderLineupLine(line, `${clubSection.club}-b-${index}`),
+                    )}
                   </ul>
                 </>
               ) : (
                 <ul className="best-lineup-list">
-                  {clubSection.start.map((line, index) => {
-                    if (!line.ru.trim() && !line.en.trim()) {
-                      return null;
-                    }
-                    const name = line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
-                    return (
-                      <li key={`${clubSection.club}-s-${index}`} className="best-lineup-li">
-                        <span className="best-lineup-role">{line.role}</span>
-                        <span className="best-lineup-name">{name}</span>
-                      </li>
-                    );
-                  })}
+                  {clubSection.start.map((line, index) =>
+                    renderLineupLine(line, `${clubSection.club}-s-${index}`),
+                  )}
                 </ul>
               )}
             </section>
@@ -241,49 +302,22 @@ export function BestLineupModal(props: BestLineupModalProps) {
                 <>
                   <h4 className="best-lineup-group-title">Старт</h4>
                   <ul className="best-lineup-list">
-                    {nationalSection.start.map((line, index) => {
-                      if (!line.ru.trim() && !line.en.trim()) {
-                        return null;
-                      }
-                      const name = line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
-                      return (
-                        <li key={`${nationalSection.countryRu}-s-${index}`} className="best-lineup-li">
-                          <span className="best-lineup-role">{line.role}</span>
-                          <span className="best-lineup-name">{name}</span>
-                        </li>
-                      );
-                    })}
+                    {nationalSection.start.map((line, index) =>
+                      renderLineupLine(line, `${nationalSection.countryRu}-s-${index}`),
+                    )}
                   </ul>
                   <h4 className="best-lineup-group-title">Запас</h4>
                   <ul className="best-lineup-list">
-                    {nationalSection.bench.map((line, index) => {
-                      if (!line.ru.trim() && !line.en.trim()) {
-                        return null;
-                      }
-                      const name = line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
-                      return (
-                        <li key={`${nationalSection.countryRu}-b-${index}`} className="best-lineup-li">
-                          <span className="best-lineup-role">{line.role}</span>
-                          <span className="best-lineup-name">{name}</span>
-                        </li>
-                      );
-                    })}
+                    {nationalSection.bench.map((line, index) =>
+                      renderLineupLine(line, `${nationalSection.countryRu}-b-${index}`),
+                    )}
                   </ul>
                 </>
               ) : (
                 <ul className="best-lineup-list">
-                  {nationalSection.start.map((line, index) => {
-                    if (!line.ru.trim() && !line.en.trim()) {
-                      return null;
-                    }
-                    const name = line.en.trim().length > 0 ? `${line.ru} (${line.en})` : line.ru;
-                    return (
-                      <li key={`${nationalSection.countryRu}-s-${index}`} className="best-lineup-li">
-                        <span className="best-lineup-role">{line.role}</span>
-                        <span className="best-lineup-name">{name}</span>
-                      </li>
-                    );
-                  })}
+                  {nationalSection.start.map((line, index) =>
+                    renderLineupLine(line, `${nationalSection.countryRu}-s-${index}`),
+                  )}
                 </ul>
               )}
             </section>

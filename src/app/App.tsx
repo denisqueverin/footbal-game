@@ -5,6 +5,7 @@ import { createInitialGameState, gameReducer } from '@/entities/game/core/reduce
 import type {
   ColorSchemeId,
   CpuDifficulty,
+  DevNeuroTeamNameMode,
   GameMode,
   HintsBudget,
   RandomPlayerHintsBudget,
@@ -54,10 +55,6 @@ export function App() {
     dispatch({ type: 'setup/setTeamController', team, controller });
   }, []);
 
-  const handleSetupSetTeamColorScheme = useCallback((team: TeamId, scheme: ColorSchemeId) => {
-    dispatch({ type: 'setup/setTeamColorScheme', team, scheme });
-  }, []);
-
   const handleSetupSetHintsBudget = useCallback((budget: HintsBudget) => {
     dispatch({ type: 'setup/setHintsBudget', budget });
   }, []);
@@ -70,8 +67,12 @@ export function App() {
     dispatch({ type: 'setup/applyDevPreset' });
   }, []);
 
-  const handleSetupStart = useCallback(() => {
-    dispatch({ type: 'setup/start' });
+  const handleSetupSetDevNeuroTeamNameMode = useCallback((mode: DevNeuroTeamNameMode) => {
+    dispatch({ type: 'setup/setDevNeuroTeamNameMode', mode });
+  }, []);
+
+  const handleSetupStart = useCallback((devToolsEnabled?: boolean) => {
+    dispatch({ type: 'setup/start', devToolsEnabled: Boolean(devToolsEnabled) });
   }, []);
 
   const handleGameReset = useCallback(() => {
@@ -80,8 +81,16 @@ export function App() {
     dispatch({ type: 'game/reset' });
   }, []);
 
-  const handleDrawRevealAssignTeamNames = useCallback(() => {
-    dispatch({ type: 'drawReveal/assignTeamNames' });
+  const handleDrawRevealSetTeamName = useCallback((team: TeamId, name: string) => {
+    dispatch({ type: 'drawReveal/setTeamName', team, name });
+  }, []);
+
+  const handleDrawRevealSetTeamColorScheme = useCallback((team: TeamId, scheme: ColorSchemeId) => {
+    dispatch({ type: 'drawReveal/setTeamColorScheme', team, scheme });
+  }, []);
+
+  const handleDrawRevealSeedCpuTeamNames = useCallback(() => {
+    dispatch({ type: 'drawReveal/seedCpuTeamNames' });
   }, []);
 
   const handleDrawRevealContinue = useCallback(() => {
@@ -98,6 +107,10 @@ export function App() {
 
   const handleFormationPickSelect = useCallback((formation: FormationId) => {
     dispatch({ type: 'formationPick/selectFormation', formation });
+  }, []);
+
+  const handleCaptainPickSelect = useCallback((team: TeamId, slotId: string) => {
+    dispatch({ type: 'captainPick/selectCaptain', team, slotId });
   }, []);
 
   const handleDraftConfirmPick = useCallback(
@@ -145,7 +158,6 @@ export function App() {
         cpuDifficultyByTeam={state.cpuDifficultyByTeam}
         teamControllers={state.teamControllers}
         onSetTeamController={handleSetupSetTeamController}
-        onSetTeamColorScheme={handleSetupSetTeamColorScheme}
         onSetTeamCount={handleSetupSetTeamCount}
         onSetMode={handleSetupSetMode}
         onSetCpuDifficultyForTeam={handleSetupSetCpuDifficultyForTeam}
@@ -154,6 +166,8 @@ export function App() {
         randomPlayerHintsBudget={state.randomPlayerHintsBudgetPerPlayer}
         onSetRandomPlayerHintsBudget={handleSetupSetRandomPlayerHintsBudget}
         onApplyDevPreset={handleSetupApplyDevPreset}
+        devNeuroTeamNameMode={state.devNeuroTeamNameMode}
+        onSetDevNeuroTeamNameMode={handleSetupSetDevNeuroTeamNameMode}
         onStart={handleSetupStart}
       />
     );
@@ -163,7 +177,9 @@ export function App() {
     page = (
       <DrawRevealPage
         state={state}
-        onAssignTeamNames={handleDrawRevealAssignTeamNames}
+        onSetTeamName={handleDrawRevealSetTeamName}
+        onSetTeamColorScheme={handleDrawRevealSetTeamColorScheme}
+        onSeedCpuTeamNames={handleDrawRevealSeedCpuTeamNames}
         onContinue={handleDrawRevealContinue}
         onReset={handleGameReset}
         continueButtonLabel={
@@ -199,6 +215,7 @@ export function App() {
         onUseBestLineupHint={handleUseBestLineupHint}
         onUseRandomPlayerHint={handleUseRandomPlayerHint}
         onClearRandomPlayerHintError={handleClearRandomPlayerHintError}
+        onSelectCaptain={handleCaptainPickSelect}
       />
     );
   }

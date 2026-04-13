@@ -1,5 +1,5 @@
 import type { GameState, TeamId } from '@/entities/game/core/types';
-import { isCpuControlledTeam } from '@/entities/game/modes/gameMode';
+import { formatTeamDisplayName, isCpuControlledTeam } from '@/entities/game/modes/gameMode';
 
 import { schemeAccent } from '@/shared/lib/schemeAccent';
 import { CpuDifficultyIcon } from '@/shared/ui/cpu-difficulty-icon';
@@ -13,6 +13,15 @@ export interface DrawRevealTeamRowProps {
 export function DrawRevealTeamRow(props: DrawRevealTeamRowProps) {
   const team = props.state.teams[props.teamId];
   const accent = schemeAccent(team.colorScheme);
+  const displayName = formatTeamDisplayName(
+    {
+      gameKind: props.state.gameKind,
+      teamOrder: props.state.teamOrder,
+      teamControllers: props.state.teamControllers,
+    },
+    props.teamId,
+    team.name,
+  );
 
   return (
     <li className="draw-reveal-li">
@@ -20,7 +29,7 @@ export function DrawRevealTeamRow(props: DrawRevealTeamRowProps) {
         {props.index}
       </span>
       <span className="draw-reveal-li-name">
-        <span className="draw-reveal-li-name-text">{team.name}</span>
+        <span className="draw-reveal-li-name-text">{displayName}</span>
         {isCpuControlledTeam(props.state, props.teamId) ? (
           <CpuDifficultyIcon difficulty={props.state.cpuDifficultyByTeam[props.teamId]} />
         ) : null}

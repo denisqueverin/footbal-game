@@ -1,4 +1,5 @@
 import type { GameState, TeamId } from '../core/types'
+import { isCpuControlledTeam } from '../modes/gameMode'
 
 const TEAM_IDS: TeamId[] = ['team1', 'team2', 'team3', 'team4']
 
@@ -27,7 +28,6 @@ export const TEAM_NAME_NOUNS = [
   'Свистки',
   'Финты',
   'Подкаты',
-  'Навесы',
   'Дриблёры',
   'Билеты',
   'Абонементы',
@@ -70,34 +70,36 @@ export const TEAM_NAME_ADJECTIVES = [
   'Легендарные',
 ] as const
 
-/** Прилагательное + существительное (существительное с маленькой буквы). */
-function randomTeamLabel(): string {
+/** Базовое имя нейро-команды (в состоянии без префикса «Нейро »): оба слова со строчной буквы. */
+export function randomNeuroTeamBaseLabel(): string {
   const noun = TEAM_NAME_NOUNS[Math.floor(Math.random() * TEAM_NAME_NOUNS.length)]!
   const adj = TEAM_NAME_ADJECTIVES[Math.floor(Math.random() * TEAM_NAME_ADJECTIVES.length)]!
-  return `${adj} ${noun.toLowerCase()}`
+  return `${adj.toLowerCase()} ${noun.toLowerCase()}`
 }
 
-function generateUniqueTeamNames(count: number): string[] {
+/** После загрузки: подставить нейро-командам случайные имена (если не режим dev «вручную»). */
+export function seedCpuNeuroBaseNames(state: GameState): GameState {
+  if (state.devToolsEnabled && state.devNeuroTeamNameMode === 'manual') {
+    return state
+  }
+  const order = state.teamOrder
   const used = new Set<string>()
-  const out: string[] = []
-  let guard = 0
-  while (out.length < count && guard < 4000) {
-    guard += 1
-    const label = randomTeamLabel()
-    if (!used.has(label)) {
-      used.add(label)
-      out.push(label)
+  for (const tid of order) {
+    used.add(state.teams[tid].name.trim().toLowerCase())
+  }
+  const nextTeams = { ...state.teams }
+  for (const tid of order) {
+    if (!isCpuControlledTeam(state, tid)) continue
+    let label = ''
+    let guard = 0
+    while (guard++ < 4000) {
+      label = randomNeuroTeamBaseLabel()
+      if (!used.has(label.toLowerCase())) break
     }
+    used.add(label.toLowerCase())
+    nextTeams[tid] = { ...nextTeams[tid], name: label }
   }
-  while (out.length < count) {
-    out.push(`Команда ${out.length + 1}`)
-  }
-  return out
-}
-
-/** Плейсхолдеры до выдачи случайных имён после сплеша. */
-export function areTeamNamesPlaceholder(state: GameState): boolean {
-  return TEAM_IDS.every((id, i) => state.teams[id].name === `Команда ${i + 1}`)
+  return { ...state, teams: nextTeams }
 }
 
 /** «Команда 1» … «Команда 4» — до конца сплеша жеребьёвки. */
@@ -105,19 +107,6 @@ export function assignPlaceholderTeamNames(state: GameState): GameState {
   const nextTeams = { ...state.teams }
   TEAM_IDS.forEach((id, i) => {
     nextTeams[id] = { ...nextTeams[id], name: `Команда ${i + 1}` }
-  })
-  return { ...state, teams: nextTeams }
-}
-
-/** Случайные названия для всех четырёх слотов (уникальные пары). Вызывать после сплеша с мячом. */
-export function assignRandomTeamNames(state: GameState): GameState {
-  const names = generateUniqueTeamNames(4)
-  const nextTeams = { ...state.teams }
-  TEAM_IDS.forEach((id, i) => {
-    const baseName = names[i]!
-    const isCpu = state.teamControllers?.[id] === 'cpu' || (state.gameKind === 'vsCpu' && id === 'team2')
-    const name = isCpu ? `Нейро ${baseName}` : baseName
-    nextTeams[id] = { ...nextTeams[id], name }
   })
   return { ...state, teams: nextTeams }
 }
